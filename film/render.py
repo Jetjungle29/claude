@@ -12,6 +12,7 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import imageio_ffmpeg
+import sfx
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent
@@ -79,6 +80,8 @@ def main():
             for i, c in enumerate(info["captions"], 1):
                 fh.write(f"{i}\n{srt_time(c['start'])} --> {srt_time(c['end'])}\n{c['text']}\n\n")
         (OUT / "shots.json").write_text(json.dumps(info["shots"], indent=1))
+        sfx.render(info["events"], info["total"], str(OUT / "sfx.wav"))
+        print(f"{len(info['events'])} sound events -> out/sfx.wav")
         print(f"total {info['total']:.1f}s, {len(info['shots'])} shots, {len(info['captions'])} captions")
         if a.mode == "stills":
             d = OUT / "stills"; d.mkdir(exist_ok=True)
@@ -98,7 +101,7 @@ def main():
     lst = OUT / "parts.txt"; lst.write_text("".join(f"file '{p}'\n" for p in parts))
     name = OUT / ("joy-plant-pilot" + ("" if captions else "-clean") + ".mp4")
     subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
-                    "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-c:v", "copy", "-c:a", "aac",
+                    "-i", str(OUT / "sfx.wav"), "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
                     "-shortest", "-movflags", "+faststart", str(name)], check=True)
     for p in parts: os.remove(p)
     lst.unlink()

@@ -11,13 +11,13 @@
 </head>
 <body>
 <canvas id="c" width="1920" height="1080"></canvas>
+<script src="kit.js"></script>
 <script>
 'use strict';
 // ---------------------------------------------------------------------------
 // Vice & Versa — Chapter One pilot (cold open + Scene 3).
 // Deterministic: renderAt(t) draws the frame at t seconds. No real-time clock.
 // ---------------------------------------------------------------------------
-const W = 1920, H = 1080;
 const cv = document.getElementById('c');
 const ctx = cv.getContext('2d');
 const P = new URLSearchParams(location.search);
@@ -258,9 +258,36 @@ function drawChips(t, mode, state) {
 let CHIP_STRIKE_T = [1e9, 1e9, 1e9, 1e9];
 function chipState(T, active) { return CHIPS.map((_, i) => ({ active: i === active, alpha: 1, strikeP: ramp(T, CHIP_STRIKE_T[i], CHIP_STRIKE_T[i] + .7) })); }
 
+const HALL_AV = { flip: true, tint: '#b09a82', tintA: .45, rim: 'rgba(255,215,160,.95)', rimSide: 1 };
+const DESERT_AV = { tint: '#f0c890', tintA: .35, rim: 'rgba(255,235,180,1)', rimSide: -1 };
+function F2(size, weight) { ctx.font = `normal ${weight} ${size}px ${SERIF}`; }
+// the DEA sentence projected on the hall wall; returns geometry of "joy plant"
+function wallText(t, a, strikeP = 0) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; KIT.glow(ctx, 800, 420, 700, 'rgba(255,215,160,A)', .16 * a); ctx.restore();
+  font(66, SERIF); ctx.save(); ctx.shadowColor = 'rgba(255,225,180,.8)'; ctx.shadowBlur = 24; textC(SHORT, 800, 470, '#fbeed6', a); ctx.restore();
+  const full = ctx.measureText(SHORT).width, pre = ctx.measureText('The Sumerians referred to it as Hul Gil, the “').width, jp = ctx.measureText('joy plant').width;
+  const x0 = 800 - full / 2 + pre; KIT.strike(ctx, x0 - 10, 450, x0 + jp + 10, 444, strikeP, 7, 13);
+  font(28, SERIF, 400, 'italic'); textC('— DEA Museum website', 800, 540, 'rgba(240,220,190,.6)', a);
+  return { x0, jp, mid: x0 + jp / 2 };
+}
+// 3600–2800 BC timeline with the proto-cuneiform band
+function timeline(t, S) {
+  const X = yr => lerp(180, 1740, (3600 - yr) / 800); const y = 600; const c1 = S.cues[1]; const tt = t - c1 + 1.2;
+  const reveal = ease(ramp(tt, .2, 1.6));
+  ctx.save(); ctx.strokeStyle = '#cbbda6'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(180, y); ctx.lineTo(lerp(180, 1740, reveal), y); ctx.stroke();
+  font(26, SERIF); for (let yr = 3600; yr >= 2800; yr -= 100) { const x = X(yr); if (x > lerp(180, 1740, reveal)) continue; ctx.fillStyle = '#cbbda6'; ctx.fillRect(x - 1, y - 10, 2, 20); textC(yr + ' BC', x, y + 50, '#cbbda6'); }
+  ctx.restore();
+  const ma = fade(tt, 1.2, .5); ctx.save(); ctx.globalAlpha *= ma; ctx.fillStyle = C.text; ctx.beginPath(); ctx.moveTo(X(3400), y - 14); ctx.lineTo(X(3400) - 14, y - 40); ctx.lineTo(X(3400) + 14, y - 40); ctx.fill();
+  font(34, SERIF, 600); textC('3400 B.C. — the claim', X(3400) - 60, y - 62, C.text); font(28, SERIF, 400, 'italic'); textC('(no writing yet)', X(3400) - 60, y - 104, '#cbbda6', fade(t, c1 + 18 * SPW, .5)); ctx.restore();
+  const ba = fade(t, c1, .6);
+  ctx.save(); ctx.globalAlpha *= ba * .45; ctx.fillStyle = C.clayLight; ctx.fillRect(X(3350), y - 150, X(3300) - X(3350), 150); ctx.restore();
+  font(28, SERIF, 400, 'italic'); textC('proto-cuneiform', (X(3350) + X(3300)) / 2 + 40, y - 170, C.clayLight, ba);
+  for (let i = 0; i < 9; i++) { const yr = 3320 - i * 55; const a = fade(t, c1 + .5 + i * .35, .4); if (a <= 0) continue; ctx.save(); ctx.globalAlpha *= a; tablet(X(yr), y + 150 + (i % 2) * 30, 90, 66, t, 500 + i, { rows: 2 }); ctx.restore(); }
+}
 const SHOTS = [
   // ===== SCENE 1 — COLD OPEN =====
   { id: 'dea', scene: 'Scene 1 — Cold open', pad: 1.2,
+    sfx(S) { const n = 190, a = S.cues[1] - .2, b = S.cues[1] + S.durs[1] * .92, out = []; for (let i = 0; i < n; i++) out.push({ t: a + (b - a) * i / n, type: 'key' }); return out; },
     lines: [
       "There's a page on the website of the Drug Enforcement Administration Museum, an institution of the United States federal government, and it says this.",
       "The earliest reference to opium growth and use is in 3400 B.C. when the opium poppy was cultivated in lower Mesopotamia. The Sumerians referred to it as Hul Gil, the 'joy plant.'",
@@ -280,6 +307,7 @@ const SHOTS = [
       font(32, SERIF, 400, 'italic'); textL('— Drug Enforcement Administration Museum, Arlington, Virginia', 270, 330 + lines.length * 70 + 70, C.dim, fade(t, .6, .8));
     } },
   { id: 'multiply', pad: .4,
+    sfx(S) { return Array.from({ length: 42 }, (_, i) => ({ t: S.dur * .8 * Math.pow(i / 42, .85), type: 'tick' })); },
     lines: ["You have almost certainly met that sentence. It's in hundreds of books. It's been on the PBS Frontline website for a quarter of a century. It opens more histories of opium than any other fact, because it's a wonderful way to begin: the oldest drug, the oldest civilisation, and a name so perfect it feels like the whole subject in two words."],
     draw(t, S) {
       ground(t); const r = rng(99); const N = 42;
@@ -295,24 +323,24 @@ const SHOTS = [
     } },
   { id: 'hold', pad: 1.4, lead: 1.6,
     lines: ["Every part of it is wrong.", "Not exaggerated. Not simplified. It's wrong on the date, wrong on the language, wrong on the translation, and wrong about the plant."],
+    sfx(S) { const b = S.cues[1], w = [8, 12, 16, 21]; return [{ t: S.cues[0] - .5, type: 'pop' }, ...w.map(i => ({ t: b + i * SPW + .3, type: 'scratch' }))]; },
     draw(t, S) {
-      ground(t); font(64, SERIF); textC(SHORT, W / 2, 470, C.text, fade(t, .1, 1));
+      KIT.hall(ctx, t, t * 4); wallText(t, 1);
       const items = ['the date', 'the language', 'the translation', 'the plant']; const base = S.cues[1];
-      const wIdx = [8, 12, 16, 21]; // word index in line 2 where each item is spoken
-      font(40, SERIF, 400, 'italic');
-      items.forEach((s, i) => { const x = W / 2 + (i - 1.5) * 330; textC(s, x, 640, C.dim, fade(t, base + wIdx[i] * SPW, .4)); strike(x - 110, 628, x + 110, 626, ramp(t, base + wIdx[i] * SPW + .3, base + wIdx[i] * SPW + .8), 400 + i, 5); });
-      vignette();
+      const wIdx = [8, 12, 16, 21]; font(40, SERIF, 400, 'italic');
+      items.forEach((s, i) => { const x = 800 + (i - 1.5) * 300; textC(s, x, 640, '#e9dcc4', fade(t, base + wIdx[i] * SPW, .4)); KIT.strike(ctx, x - 105, 628, x + 105, 624, ramp(t, base + wIdx[i] * SPW + .3, base + wIdx[i] * SPW + .8), 400 + i, 6); });
+      KIT.avatar(ctx, 1680, 1110, 720, t, Object.assign({ pop: ramp(t, S.cues[0] - .5, S.cues[0] + .5) }, HALL_AV));
+      KIT.vignette(ctx, .75); KIT.filmGrain(ctx, t, .3);
     } },
   { id: 'strike', pad: 1.8, lead: .4,
     lines: ["The joy plant was, almost certainly, a stinking cucumber."],
+    sfx(S) { return [{ t: .2, type: 'hit' }, { t: .2, type: 'scratch' }, { t: 2.5, type: 'thud' }]; },
     draw(t, S) {
-      ground(t); font(64, SERIF); textC(SHORT, W / 2, 470, C.text);
-      const full = ctx.measureText(SHORT).width; const pre = ctx.measureText('The Sumerians referred to it as Hul Gil, the “').width; const jp = ctx.measureText('joy plant').width;
-      const x0 = W / 2 - full / 2 + pre;
-      strike(x0 - 8, 452, x0 + jp + 8, 448, ramp(t, .2, .9), 7, 10);
-      const k = easeOut(ramp(t, .9, 2.6)); const gx = lerp(W + 150, x0 + jp / 2, k); const rot = (1 - k) * 9;
-      gourd(gx, 640, 1.1, t, 5, -rot);
-      vignette();
+      KIT.hall(ctx, t, 30 + t * 4); const x0 = wallText(t, 1, ramp(t, .2, .75));
+      const k = easeOut(ramp(t, .9, 2.6)); const gx = lerp(-150, x0.mid, k);
+      KIT.gourd(ctx, gx, 860, 1.4, t, 5, -(1 - k) * 9); KIT.glow(ctx, gx, 860, 200, 'rgba(255,220,150,A)', .25 * k);
+      KIT.avatar(ctx, 1680, 1110, 720, t, HALL_AV);
+      KIT.vignette(ctx, .75); KIT.filmGrain(ctx, t, .3);
     } },
   { id: 'montage', pad: .8,
     lines: ["By the end of this video you'll know how a mistranslated cucumber ended up on a federal drug agency's website, what the oldest real evidence of opium actually is, and why the world's oldest beer recipe may not be a recipe, or even beer.",
@@ -326,6 +354,7 @@ const SHOTS = [
       vignette();
     } },
   { id: 'title', pad: 0, lead: 5.5, lines: [],
+    sfx(S) { return [{ t: 1.2, type: 'hit' }]; },
     draw(t, S) {
       ground(t, '#0d0b09'); const a = fade(t, .2, 1) * (1 - fade(t, S.dur - .7, .6));
       ctx.save(); ctx.globalAlpha = a;
@@ -347,24 +376,19 @@ const SHOTS = [
     lines: ["One. The date is before writing.",
       "Proto-cuneiform, among the earliest writing anywhere, begins somewhere around 3350 to 3300 BC. In 3400 BC there is nothing to write a word like hul gil in. In Mesopotamia, nobody was writing anything down yet."],
     strikeAfterLine: 0,
+    sfx(S) { return [{ t: .5, type: 'pop' }, { t: S.cues[0] + S.durs[0] - .3, type: 'hit' }, { t: S.cues[0] + S.durs[0] - .3, type: 'scratch' }]; },
     draw(t, S) {
-      ground(t); drawChips(t, 1, chipState(S.T0 + t, 0));
-      // timeline 3600 → 2800 BC
-      const X = yr => lerp(180, 1740, (3600 - yr) / 800); const y = 600;
-      const reveal = ease(ramp(t, .2, 1.6));
-      ctx.save(); ctx.strokeStyle = C.dim; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(180, y); ctx.lineTo(lerp(180, 1740, reveal), y); ctx.stroke();
-      font(26, SERIF); for (let yr = 3600; yr >= 2800; yr -= 100) { const x = X(yr); if (x > lerp(180, 1740, reveal)) continue; ctx.fillStyle = C.dim; ctx.fillRect(x - 1, y - 10, 2, 20); textC(yr + ' BC', x, y + 50, C.dim); }
-      ctx.restore();
-      // 3400 marker in darkness
-      const ma = fade(t, 1.2, .5); ctx.save(); ctx.globalAlpha = ma; ctx.fillStyle = C.text; ctx.beginPath(); ctx.moveTo(X(3400), y - 14); ctx.lineTo(X(3400) - 14, y - 40); ctx.lineTo(X(3400) + 14, y - 40); ctx.fill();
-      font(34, SERIF, 600); textC('3400 B.C. — the claim', X(3400), y - 62, C.text); font(28, SERIF, 400, 'italic'); textC('(no writing yet)', X(3400), y - 24 - 80, C.dim, fade(t, S.cues[1] + 18 * SPW, .5)); ctx.restore();
-      // proto-cuneiform band + tablets
-      const c1 = S.cues[1]; const ba = fade(t, c1, .6);
-      ctx.save(); ctx.globalAlpha = ba * .35; ctx.fillStyle = C.clayLight; ctx.fillRect(X(3350), y - 150, X(3300) - X(3350), 150); ctx.restore();
-      font(28, SERIF, 400, 'italic'); textC('proto-cuneiform', (X(3350) + X(3300)) / 2 + 30, y - 170, C.clayLight, ba);
-      for (let i = 0; i < 9; i++) { const yr = 3320 - i * 55; const a = fade(t, c1 + .5 + i * .35, .4); if (a <= 0) continue; ctx.save(); ctx.globalAlpha = a; tablet(X(yr), y + 150 + (i % 2) * 30, 90, 66, t, 500 + i, { rows: 2 }); ctx.restore(); }
+      KIT.marsh(ctx, t, t * 10);
+      const c1 = S.cues[1], dim = ease(ramp(t, c1 - .4, c1 + .6));
+      // giant date, struck at the end of the header line
+      const big = 1 - dim; if (big > 0) { ctx.save(); ctx.globalAlpha = big; F2(300, 600); textC('3400 B.C.', 1240, 390, 'rgba(255,236,205,.95)'); ctx.restore();
+        KIT.strike(ctx, 780, 300, 1700, 282, ramp(t, S.cues[0] + S.durs[0] - .3, S.cues[0] + S.durs[0] + .25) * big, 3, 26); }
+      KIT.reedsFG(ctx, t, t * 10, 5);
+      KIT.avatar(ctx, 330 - dim * 900, 1110, 800, t, { tint: '#e4a58a', tintA: .5, rim: 'rgba(255,170,90,1)', rimSide: 1, pop: ramp(t, .5, 1.5) });
+      if (dim > 0) { ctx.fillStyle = `rgba(12,8,12,${dim * .72})`; ctx.fillRect(0, 0, W, H); ctx.save(); ctx.globalAlpha = dim; timeline(t, S); ctx.restore(); }
+      drawChips(t, 1, chipState(S.T0 + t, 0));
       lowerThird('Earliest Mesopotamian writing: proto-cuneiform, c. 3350–3300 BC', t, c1 + .4, S.dur);
-      vignette();
+      KIT.vignette(ctx, .7); KIT.filmGrain(ctx, t, .3);
     } },
   { id: 'two', pad: 1.0,
     lines: ["Two. The language can't be identified.",
@@ -425,34 +449,33 @@ const SHOTS = [
       "Most likely it's colocynth, Citrullus colocynthis, the bitter apple. It's a desert gourd, botanically a cousin of the watermelon, that was used as a violent purgative.",
       "Barbara Böck, whose 2023 herbal with Kew is the current standard reference on Mesopotamian plants, says the opium poppy is simply absent from the cuneiform record, or else hidden behind one of the many plant names nobody has been able to identify."],
     strikeAfterLine: 0,
+    sfx(S) { return [{ t: .4, type: 'pop' }, { t: S.cues[1] - .2, type: 'whoosh' }]; },
     draw(t, S) {
-      ground(t); drawChips(t, 1, chipState(S.T0 + t, 3));
-      const c1 = S.cues[1], c2 = S.cues[2]; const a = fade(t, .3, .8);
-      ctx.save(); ctx.globalAlpha = a; const [bx, by] = boil(t, 91, .6); ctx.translate(bx, by);
-      card(560, 170, 800, 640, 91, C.paper, .55);
-      ctx.strokeStyle = 'rgba(42,33,26,.35)'; ctx.lineWidth = 2; ctx.strokeRect(590, 200, 740, 580);
-      // vine, lobed leaf, tendril
-      ctx.strokeStyle = '#4f6a2e'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(640, 360); ctx.bezierCurveTo(760, 300, 880, 420, 960, 400); ctx.stroke();
-      ctx.lineWidth = 2.5; ctx.beginPath(); for (let i = 0; i < 40; i++) { const a2 = i * .5, rr = 26 - i * .55; const x = 700 + Math.cos(a2) * rr + i * .8, y = 300 + Math.sin(a2) * rr; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
-      ctx.fillStyle = '#5d7a35'; ctx.save(); ctx.translate(820, 330); ctx.rotate(-.4); ctx.beginPath();
-      for (let i = 0; i <= 60; i++) { const th = i / 60 * 6.283; const rr = 70 * (0.55 + 0.45 * Math.abs(Math.cos(th * 2.5))); ctx.lineTo(Math.cos(th) * rr, Math.sin(th) * rr * .8); } ctx.fill(); ctx.restore();
-      gourd(960, 490, 2.0, t, 92);
-      font(52, SERIF, 400, 'italic'); textC('Citrullus colocynthis', 960, 690, C.ink, fade(t, c1 + 3 * SPW, .6));
-      font(34, SERIF); textC('colocynth · the bitter apple', 960, 735, 'rgba(42,33,26,.8)', fade(t, c1 + 6 * SPW, .6));
-      font(26, SERIF, 400, 'italic'); textC('desert gourd · watermelon genus · a violent purgative', 960, 775, 'rgba(42,33,26,.6)', fade(t, c1 + 12 * SPW, .6));
-      ctx.restore();
+      KIT.desert(ctx, t, t * 8); const c1 = S.cues[1], c2 = S.cues[2];
+      const g = easeOut(ramp(t, c1 - .3, c1 + .8));
+      KIT.glow(ctx, 1150, 450, 320, 'rgba(255,230,160,A)', .4 * g); KIT.gourd(ctx, 1150, 450 + (1 - g) * 560, 2.4, t, 92, .12);
+      const tag = (s, y, size, st, col, a) => { if (a <= 0) return; ctx.save(); ctx.globalAlpha = a; font(size, SERIF, 400, st); textC(s, 1150, y, col); ctx.restore(); };
+      if (g > .5) { ctx.save(); ctx.globalAlpha = fade(t, c1 + 2 * SPW, .5); card(880, 630, 540, 170, 91, C.paper, .5); ctx.restore(); }
+      tag('Citrullus colocynthis', 690, 50, 'italic', C.ink, fade(t, c1 + 3 * SPW, .6));
+      tag('colocynth · the bitter apple', 735, 32, 'normal', 'rgba(42,33,26,.85)', fade(t, c1 + 6 * SPW, .6));
+      tag('desert gourd · watermelon genus · violent purgative', 775, 24, 'italic', 'rgba(42,33,26,.7)', fade(t, c1 + 12 * SPW, .6));
+      KIT.avatar(ctx, 400, 1110, 820, t, Object.assign({ pop: ramp(t, .4, 1.4) }, DESERT_AV));
+      drawChips(t, 1, chipState(S.T0 + t, 3));
       lowerThird('Böck, Ghazanfar & Nesbitt, An Ancient Mesopotamian Herbal, Kew Publishing, 2023', t, c2, S.dur);
-      vignette();
+      KIT.vignette(ctx, .6); KIT.filmGrain(ctx, t, .3);
     } },
   { id: 'resolve', pad: 2.4, lead: .8,
     lines: ["The joy plant was, almost certainly, a stinking cucumber."],
+    sfx(S) { return [{ t: .5, type: 'hit' }, { t: .5, type: 'scratch' }, { t: 1.6, type: 'thud' }]; },
     draw(t, S) {
-      ground(t); drawChips(t, 1, chipState(S.T0 + t, -1));
-      const k = ease(ramp(t, .4, 2.2));
-      ctx.save(); ctx.globalAlpha = 1 - k * .85; poppy(960 - k * 360, 560 + k * 60, 1.3, t, 201, k > .3 ? 1 : 0); ctx.restore();
-      if (k > .05) strike(960 - k * 360 - 120, 500 + k * 60, 960 - k * 360 + 120, 520 + k * 60, ramp(t, .6, 1.2), 88, 8);
-      gourd(lerp(1500, 960, easeOut(ramp(t, 1.0, 2.6))), 560, 1.8, t, 202, (1 - easeOut(ramp(t, 1.0, 2.6))) * 6);
-      vignette();
+      KIT.desert(ctx, t, 60 + t * 8);
+      ctx.save(); ctx.translate(1560, 960); ctx.rotate(-1.35); KIT.poppy(ctx, 0, 0, .8, 1); ctx.restore(); KIT.strike(ctx, 1370, 900, 1600, 930, ramp(t, 1.4, 1.9), 11, 12);
+      F2(150, 600); textC('“joy plant”', 1250, 290, '#fff4dc'); KIT.strike(ctx, 940, 256, 1570, 242, ramp(t, .5, 1.1), 5, 20);
+      font(58, SERIF, 400, 'italic'); textC('almost certainly… a stinking cucumber', 1250, 390, '#3a1d10', fade(t, S.cues[0] + 4 * SPW, .6));
+      KIT.gourd(ctx, lerp(2100, 1150, easeOut(ramp(t, .9, 1.7))), 650, 2.2, t, 92, (1 - easeOut(ramp(t, .9, 1.7))) * -8);
+      KIT.avatar(ctx, 400, 1110, 820, t, DESERT_AV);
+      drawChips(t, 1, chipState(S.T0 + t, -1));
+      KIT.vignette(ctx, .6); KIT.filmGrain(ctx, t, .3);
     } },
   { id: 'end', pad: 0, lead: 3.5, lines: [],
     draw(t, S) { ctx.fillStyle = '#070606'; ctx.fillRect(0, 0, W, H); font(30, SERIF, 400, 'italic'); textC('End of pilot · the film continues with Scene 4, “Where it came from”', W / 2, H / 2, C.dim, fade(t, .3, .6) * (1 - fade(t, S.dur - .8, .6))); } },
@@ -479,6 +502,11 @@ for (const S of SHOTS) {
   });
   S.dur = t + (S.pad || 0); T += S.dur;
 }
+const EVENTS = [];
+SHOTS.forEach((S, i) => { if (i > 0) EVENTS.push({ t: S.T0, type: 'whoosh' }); if (S.sfx) S.sfx(S).forEach(e => EVENTS.push({ t: S.T0 + e.t, type: e.type })); });
+CHIP_STRIKE_T.forEach(t => { if (t < 1e8) EVENTS.push({ t, type: 'scratch' }, { t: t + .05, type: 'thud' }); });
+EVENTS.sort((a, b) => a.t - b.t);
+const HITS = EVENTS.filter(e => e.type === 'hit').map(e => e.t);
 const TOTAL = T;
 
 function caption(T) {
@@ -492,15 +520,22 @@ function caption(T) {
 
 function renderAt(T) {
   let S = SHOTS[SHOTS.length - 1]; for (const s of SHOTS) if (T < s.T0 + s.dur) { S = s; break; }
-  const t = T - S.T0; ctx.save(); S.draw(t, S); ctx.restore();
+  const t = T - S.T0; ctx.save();
+  // camera shake on every hit
+  let sh = 0; for (const h of HITS) if (T >= h && T < h + .6) sh = Math.max(sh, Math.exp(-(T - h) * 9));
+  if (sh > .01) { const r = rng(Math.floor(T * 60)); ctx.translate((r() - .5) * 26 * sh, (r() - .5) * 18 * sh); ctx.scale(1 + .012 * sh, 1 + .012 * sh); }
+  S.draw(t, S); ctx.restore();
+  // red flash on hits
+  if (sh > .01) { ctx.fillStyle = `rgba(163,42,30,${.16 * sh})`; ctx.fillRect(0, 0, W, H); }
   // soft cross-dissolve from black at every shot start
   const a = 1 - fade(t, 0, .35); if (a > 0 && S.id !== 'dea') { ctx.fillStyle = `rgba(0,0,0,${a * .8})`; ctx.fillRect(0, 0, W, H); }
   caption(T);
 }
 window.renderAt = renderAt;
-window.getInfo = () => ({ total: TOTAL, captions: CAPTIONS, shots: SHOTS.map(s => ({ id: s.id, scene: s.scene || '', start: s.T0, dur: s.dur })) });
+window.getInfo = () => ({ total: TOTAL, captions: CAPTIONS, shots: SHOTS.map(s => ({ id: s.id, scene: s.scene || '', start: s.T0, dur: s.dur })), events: EVENTS });
 window.frameJPEG = (T, q = .92) => { renderAt(T); return cv.toDataURL('image/jpeg', q); };
 window.ready = (async () => {
+  await KIT.avatarReady;
   await Promise.all([`400 46px "IBM Plex Mono"`, `400 40px "EB Garamond"`, `italic 400 40px "EB Garamond"`, `600 40px "EB Garamond"`, `400 38px Inter`, `600 16px Inter`].map(f => document.fonts.load(f, 'ḪÚL GÍL Böck abc')));
   // re-run the timing pass is font-independent; just draw the first frame
   renderAt(0); return true;
