@@ -128,12 +128,18 @@ def main(test=False):
     vc = hubconf.knn_vc(pretrained=True, progress=False, prematched=True, device="cpu")
     ms = vc.get_matching_set([os.path.join(VO, "ref16.wav")])
     out_dir = os.path.join(VO, "test" if test else "lines"); os.makedirs(out_dir, exist_ok=True)
+    global START_SRC; START_SRC = sum(1 for f in os.listdir(out_dir) if f.endswith("_src.wav"))
     timing = {}
     for s in json.load(open(os.path.join(ROOT, "out", "vo_lines.json"))):
         if not s["lines"] or (test and s["id"] not in ("hold", "strike")):
             continue
         timing[s["id"]] = []
         for i, line in enumerate(s["lines"]):
+            done = os.path.join(out_dir, f"{s['id']}_{i}.wav")
+            if os.path.exists(done) and not test:   # resumable: keep lines already generated
+                timing[s["id"]].append(round(sf.info(done).frames / 16000, 3)); continue
+            if os.environ.get("MAX_NEW") and sum(1 for f in os.listdir(out_dir) if f.endswith("_src.wav")) >= int(os.environ["MAX_NEW"]) + START_SRC:
+                sys.exit(3)                         # stop early; rerun to continue in a fresh process
             a, sr = perform(kok, line)
             w16 = torchaudio.functional.resample(torch.tensor(a, dtype=torch.float32)[None], sr, 16000)[0].numpy()
             src = os.path.join(out_dir, f"{s['id']}_{i}_src.wav"); sf.write(src, w16, 16000)
