@@ -113,3 +113,35 @@ def render(events, total, path, captions=None):
     mix = np.tanh(mix * 1.1) / np.tanh(1.1)
     mix *= .89 / max(1e-6, np.abs(mix).max())
     wavfile.write(path, SR, (mix * 32767).astype(np.int16))
+
+
+def mix_with_vo(shots, sfx_path, lines_dir, out_path, ffmpeg):
+    """Place each narration line at its cue, polish the voice, duck the sound design under it, master to -14 LUFS."""
+    import os, subprocess, tempfile
+    import soundfile as sf
+    from scipy.signal import resample_poly
+    _, fx = wavfile.read(sfx_path); fx = fx.astype(float) / 32767
+    vo = np.zeros(len(fx))
+    for s in shots:
+        for i, c in enumerate(s.get("cues", [])):
+            p = os.path.join(lines_dir, f"{s['id']}_{i}.wav")
+            if not os.path.exists(p): continue
+            x, r = sf.read(p)
+            if x.ndim > 1: x = x.mean(1)
+            x = resample_poly(x, SR, r)
+            a = int(c * SR); b = min(len(vo), a + len(x)); vo[a:b] += x[:b - a]
+    tmp = tempfile.mkdtemp()
+    wavfile.write(f"{tmp}/vo_raw.wav", SR, (np.clip(vo / max(1e-6, np.abs(vo).max()) * .9, -1, 1) * 32767).astype(np.int16))
+    subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", f"{tmp}/vo_raw.wav", "-af",
+                    "highpass=f=70,equalizer=f=180:t=q:w=1:g=2,equalizer=f=3200:t=q:w=1.4:g=1.5,"
+                    "acompressor=threshold=-22dB:ratio=2.5:attack=6:release=150:makeup=2,loudnorm=I=-16:TP=-2",
+                    "-ar", str(SR), "-ac", "1", f"{tmp}/vo.wav"], check=True)
+    _, v = wavfile.read(f"{tmp}/vo.wav"); v = v.astype(float) / 32767
+    v = np.pad(v, (0, max(0, len(fx) - len(v))))[:len(fx)]
+    # sidechain duck: the sound design drops ~8 dB while the voice is speaking
+    envv = np.convolve(np.abs(v), np.ones(4800) / 4800, mode="same")
+    duck = 1 - .6 * np.clip(envv / .02, 0, 1)
+    mix = fx * (.55 * duck)[:, None] + v[:, None]
+    wavfile.write(f"{tmp}/mix.wav", SR, (np.clip(mix / max(1e-6, np.abs(mix).max()) * .9, -1, 1) * 32767).astype(np.int16))
+    subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", f"{tmp}/mix.wav", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+                    "-ar", str(SR), out_path], check=True)

@@ -82,6 +82,10 @@ def main():
         (OUT / "shots.json").write_text(json.dumps(info["shots"], indent=1))
         sfx.render(info["events"], info["total"], str(OUT / "sfx.wav"))
         print(f"{len(info['events'])} sound events -> out/sfx.wav")
+        audio = OUT / "sfx.wav"
+        if info.get("vo") and (ROOT / "vo" / "lines").exists():
+            sfx.mix_with_vo(info["shots"], str(audio), str(ROOT / "vo" / "lines"), str(OUT / "mix.wav"), FFMPEG)
+            audio = OUT / "mix.wav"; print("narration mixed -> out/mix.wav")
         print(f"total {info['total']:.1f}s, {len(info['shots'])} shots, {len(info['captions'])} captions")
         if a.mode == "stills":
             d = OUT / "stills"; d.mkdir(exist_ok=True)
@@ -99,9 +103,9 @@ def main():
     with ProcessPoolExecutor(len(jobs)) as ex:
         parts = list(ex.map(render_part, jobs))
     lst = OUT / "parts.txt"; lst.write_text("".join(f"file '{p}'\n" for p in parts))
-    name = OUT / ("joy-plant-pilot" + ("" if captions else "-clean") + ".mp4")
+    name = OUT / ("joy-plant-pilot" + ("-narrated" if audio.name == "mix.wav" else "") + ("" if captions else "-clean") + ".mp4")
     subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
-                    "-i", str(OUT / "sfx.wav"), "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+                    "-i", str(audio), "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
                     "-shortest", "-movflags", "+faststart", str(name)], check=True)
     for p in parts: os.remove(p)
     lst.unlink()
