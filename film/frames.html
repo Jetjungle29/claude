@@ -24,18 +24,18 @@ const FRAMES = [
     KIT.strike(ctx, x0 - 14, 438, x0 + jp + 14, 430, 1, 7, 16);
     F(30, 400, 'italic'); text('— DEA Museum website', 900, 560, 'rgba(240,220,190,.6)');
     // presenter, foreground right, turned to the wall, pointing
-    KIT.presenter(ctx, 1560, 1330, 1.25, t, { face: -1, head: -.12, look: -1, smile: .2, armF: [1.95, .2], armB: [-.08, .12], openF: true, rimSide: 1 });
+    KIT.avatar(ctx, 1640, 1110, 800, t, { flip: true, tint: '#b09a82', tintA: .45, rim: 'rgba(255,215,160,.95)', rimSide: 1 });
     KIT.dust(ctx, t, 9, 60, [0, 0, 1920, 1080], .35);
     KIT.vignette(ctx, .8); KIT.filmGrain(ctx, t, .35);
   },
   // B — Uruk-period marsh at dusk. Giant "3400 B.C." struck across the sky.
   t => {
     KIT.marsh(ctx, t, 0);
-    ctx.save(); ctx.globalAlpha = .9; F(300, 600); text('3400 B.C.', 1180, 330, 'rgba(255,236,205,.92)', 'center', 40); ctx.restore();
-    KIT.strike(ctx, 720, 240, 1640, 222, 1, 3, 26);
-    F(46, 400, 'italic'); text('Nothing written. Anywhere in Mesopotamia.', 1180, 430, '#fff1dc', 'center', 12);
-    KIT.presenter(ctx, 470, 1230, 1.05, t, { face: 1, head: .05, look: 1, smile: .5, mouth: .35, armF: [1.75, .35], armB: [-.1, .15], openF: true });
+    ctx.save(); ctx.globalAlpha = .9; F(300, 600); text('3400 B.C.', 1240, 330, 'rgba(255,236,205,.92)', 'center', 40); ctx.restore();
+    KIT.strike(ctx, 780, 240, 1700, 222, 1, 3, 26);
+    F(46, 400, 'italic'); text('Nothing written. Anywhere in Mesopotamia.', 1240, 430, '#fff1dc', 'center', 12);
     KIT.reedsFG(ctx, t, 0, 5);
+    KIT.avatar(ctx, 330, 1110, 820, t, { tint: '#e4a58a', tintA: .5, rim: 'rgba(255,170,90,1)', rimSide: 1 });
     KIT.vignette(ctx, .7); KIT.filmGrain(ctx, t, .35);
   },
   // C — desert, golden hour. Presenter holds up the colocynth. The poppy lies struck in the sand.
@@ -46,14 +46,14 @@ const FRAMES = [
     F(150, 600); text('“joy plant”', 1330, 230, '#fff4dc', 'center', 30);
     KIT.strike(ctx, 1020, 196, 1650, 182, 1, 5, 20);
     F(58, 400, 'italic'); text('almost certainly… a stinking cucumber', 1330, 330, '#3a1d10');
-    const hold = c => KIT.gourd(c, 20, -70, 1.05, t, 92, .2);
-    KIT.presenter(ctx, 560, 1250, 1.1, t, { face: 1, head: -.08, look: .5, smile: .9, armF: [1.85, .55], armB: [-.1, .12], hold, rimSide: -1 });
+    KIT.avatar(ctx, 420, 1120, 880, t, { tint: '#f0c890', tintA: .35, rim: 'rgba(255,235,180,1)', rimSide: -1 });
+    KIT.glow(ctx, 960, 560, 260, 'rgba(255,230,160,A)', .35); KIT.gourd(ctx, 960, 560, 2.2, t, 92, .15);
     // botanical tag pinned near the gourd
-    ctx.save(); ctx.translate(830, 470); ctx.rotate(-.05); ctx.fillStyle = '#efe4c8'; ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 12; ctx.fillRect(0, 0, 330, 70); ctx.shadowBlur = 0;
+    ctx.save(); ctx.translate(800, 740); ctx.rotate(-.05); ctx.fillStyle = '#efe4c8'; ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 12; ctx.fillRect(0, 0, 330, 70); ctx.shadowBlur = 0;
     F(34, 400, 'italic'); text('Citrullus colocynthis', 165, 46, '#2a211a'); ctx.restore();
     KIT.vignette(ctx, .6); KIT.filmGrain(ctx, t, .3);
   },
 ];
 window.drawFrame = (i, t) => { ctx.clearRect(0, 0, 1920, 1080); FRAMES[i](t); return cv.toDataURL('image/jpeg', .92); };
-window.ready = Promise.all(['400 40px "EB Garamond"', 'italic 400 40px "EB Garamond"', '600 40px "EB Garamond"', '500 40px "EB Garamond"'].map(f => document.fonts.load(f)));
+window.ready = Promise.all([KIT.avatarReady].concat(['400 40px "EB Garamond"', 'italic 400 40px "EB Garamond"', '600 40px "EB Garamond"', '500 40px "EB Garamond"'].map(f => document.fonts.load(f))));
 </script></body></html>

@@ -224,3 +224,36 @@ const KIT = {};
     pet(-.9, petal2); pet(.9, petal2); pet(-.35, petal); pet(.35, petal); ctx.fillStyle = '#1b1411'; ctx.beginPath(); ctx.arc(0, -8, 22, 0, 6.283); ctx.fill(); ctx.restore();
   };
 })();
+
+// ---- AVATAR (image-based presenter) ------------------------------------------
+// Cut-out bust with a paper "sticker" edge, relit per scene.
+// opts: { flip, tint (multiply colour), rim (rgba colour), rimSide: -1 left / 1 right, sway, pop 0..1 }
+(function () {
+  const load = src => new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = src; });
+  KIT.avatarReady = Promise.all([load('assets/avatar_cut.png'), load('assets/avatar_border.png')]).then(([a, b]) => { KIT.AV = a; KIT.AVB = b; });
+  let off = null, msk = null;
+  KIT.avatar = (ctx, cx, bottom, h, t, o = {}) => {
+    const O = Object.assign({ flip: false, tint: '#ffffff', tintA: .35, rim: 'rgba(255,210,150,.9)', rimSide: 1, sway: 1, pop: 1 }, o);
+    const img = KIT.AV, bor = KIT.AVB; if (!img) return;
+    const s = h / img.height, w = img.width * s;
+    if (!off) { off = document.createElement('canvas'); msk = document.createElement('canvas'); }
+    msk.width = Math.ceil(w); msk.height = Math.ceil(h); const mg = msk.getContext('2d'); mg.clearRect(0, 0, w, h); mg.drawImage(bor, 0, 0, w, h); mg.drawImage(img, 0, 0, w, h);
+    off.width = Math.ceil(w); off.height = Math.ceil(h); const g = off.getContext('2d');
+    g.clearRect(0, 0, off.width, off.height);
+    g.drawImage(bor, 0, 0, w, h); g.drawImage(img, 0, 0, w, h);
+    // relight: multiply tint, rim light from one side, paper grain
+    g.globalCompositeOperation = 'source-atop';
+    g.globalAlpha = O.tintA; g.fillStyle = O.tint; g.globalCompositeOperation = 'multiply'; g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = 'source-atop'; g.globalAlpha = 1;
+    const lx = O.rimSide > 0 ? w : 0; const rg = g.createLinearGradient(lx, 0, w / 2, 0); rg.addColorStop(0, O.rim); rg.addColorStop(.35, 'rgba(0,0,0,0)');
+    g.globalCompositeOperation = 'soft-light'; g.fillStyle = rg; g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = 'source-atop'; g.globalAlpha = .25; g.fillStyle = g.createPattern(KIT.GRAIN_D, 'repeat'); g.fillRect(0, 0, w, h);
+    g.globalAlpha = 1; g.globalCompositeOperation = 'destination-in'; g.drawImage(msk, 0, 0); g.globalCompositeOperation = 'source-over';
+    // place: idle breathing + sway, optional pop-in bounce
+    const br = 1 + Math.sin(t * 1.7) * .006 * O.sway, rot = Math.sin(t * .9) * .012 * O.sway;
+    const k = Math.min(1, Math.max(0, O.pop)); const bounce = k < 1 ? 1 - Math.pow(1 - k, 3) * Math.cos(k * 9) : 1;
+    ctx.save(); ctx.translate(cx, bottom + (1 - bounce) * h * .4); ctx.rotate(rot * (O.flip ? -1 : 1)); ctx.scale((O.flip ? -1 : 1) * br, br);
+    ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 40; ctx.shadowOffsetX = 14 * (O.flip ? 1 : -1); ctx.shadowOffsetY = 10;
+    ctx.drawImage(off, -w / 2, -h, w, h); ctx.restore();
+  };
+})();
