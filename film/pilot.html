@@ -1,0 +1,510 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Joy Plant Pilot</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+'use strict';
+// ---------------------------------------------------------------------------
+// Vice & Versa — Chapter One pilot (cold open + Scene 3).
+// Deterministic: renderAt(t) draws the frame at t seconds. No real-time clock.
+// ---------------------------------------------------------------------------
+const W = 1920, H = 1080;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const P = new URLSearchParams(location.search);
+const SHOW_CAPTIONS = P.get('captions') !== '0';
+
+const C = {
+  ground: '#15120f', ground2: '#1d1915',
+  paper: '#e8dcc2', paperDark: '#cdbd9c', ink: '#2a211a',
+  clay: '#a9825a', clayDark: '#7d5c3c', clayLight: '#c9a47a',
+  red: '#A32A1E', warm: '#e0a64a', sick: '#8fa33a',
+  text: '#efe6d3', dim: '#8d8272',
+};
+const SERIF = '"EB Garamond", Georgia, serif';
+const MONO = '"IBM Plex Mono", monospace';
+const SANS = 'Inter, sans-serif';
+
+// ---- utils ----------------------------------------------------------------
+function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = Math.imul(s ^ (s >>> 15), 1 | s) + 0x6D2B79F5 >>> 0, s = (s ^ (s + Math.imul(s ^ (s >>> 7), 61 | s))) >>> 0), ((s ^ (s >>> 14)) >>> 0) / 4294967296); }
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const ease = k => { k = clamp(k); return k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; };
+const easeOut = k => 1 - Math.pow(1 - clamp(k), 3);
+const ramp = (t, a, b) => clamp((t - a) / (b - a));           // 0→1 between a and b
+const fade = (t, a, d = .5) => easeOut(ramp(t, a, a + d));
+// "boil": cut-out figures twitch slightly at 8 fps, like stop-motion paper.
+function boil(t, seed, amp = 1.2) { const f = Math.floor(t * 8); const r = rng(seed * 7919 + f); return [(r() - .5) * 2 * amp, (r() - .5) * 2 * amp, (r() - .5) * .006 * amp]; }
+
+// ---- textures -------------------------------------------------------------
+function makeGrain(w, h, seed, dens, light) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'); const r = rng(seed);
+  const img = g.createImageData(w, h); const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = r(); const a = v < dens ? 255 * (0.25 + r() * 0.5) : 0;
+    const col = light ? 255 : 0; d[i] = d[i + 1] = d[i + 2] = col; d[i + 3] = a * 0.35;
+  }
+  g.putImageData(img, 0, 0);
+  // fibres
+  g.globalAlpha = 0.06; g.strokeStyle = light ? '#fff' : '#000'; g.lineWidth = 1;
+  for (let i = 0; i < w * h / 9000; i++) { const x = r() * w, y = r() * h, a = r() * 6.28, l = 6 + r() * 30; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a + 1) * l / 2, y + Math.sin(a + 1) * l / 2, x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke(); }
+  return c;
+}
+const GRAIN_DARK = makeGrain(960, 540, 11, 0.10, true);   // specks on the dark ground
+const GRAIN_PAPER = makeGrain(700, 700, 23, 0.22, false); // darker specks for paper/clay
+const VIGNETTE = (() => { const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); const gr = g.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.72)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); return c; })();
+
+function ground(t, col = C.ground) {
+  ctx.fillStyle = col; ctx.fillRect(0, 0, W, H);
+  const f = Math.floor(t * 8) % 4; // shift grain slowly — film-like
+  ctx.globalAlpha = 0.5; ctx.drawImage(GRAIN_DARK, -f * 7, -f * 5, W + 40, H + 40); ctx.globalAlpha = 1;
+}
+function vignette() { ctx.drawImage(VIGNETTE, 0, 0); }
+
+// A rough-edged "cut paper" polygon approximating a rectangle.
+function roughRect(x, y, w, h, seed, j = 2.2) {
+  const r = rng(seed); const pts = [];
+  const side = (x0, y0, x1, y1) => { const n = Math.max(3, Math.round(Math.hypot(x1 - x0, y1 - y0) / 40)); for (let i = 0; i < n; i++) { const k = i / n; pts.push([lerp(x0, x1, k) + (r() - .5) * j, lerp(y0, y1, k) + (r() - .5) * j]); } };
+  side(x, y, x + w, y); side(x + w, y, x + w, y + h); side(x + w, y + h, x, y + h); side(x, y + h, x, y);
+  ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
+}
+function paperFill(fill, grainAlpha = .5) {
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 8; ctx.fillStyle = fill; ctx.fill(); ctx.restore();
+  ctx.save(); ctx.clip(); ctx.globalAlpha = grainAlpha; ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = ctx.createPattern(GRAIN_PAPER, 'repeat'); ctx.fillRect(0, 0, W, H); ctx.restore();
+}
+function card(x, y, w, h, seed, fill = C.paper, grain = .5) { roughRect(x, y, w, h, seed); paperFill(fill, grain); }
+
+// ---- text -----------------------------------------------------------------
+function font(size, fam = SERIF, weight = 400, style = 'normal') { ctx.font = `${style} ${weight} ${size}px ${fam}`; }
+function wrap(text, maxW) {
+  const words = text.split(' '); const lines = []; let cur = '';
+  for (const w of words) { const test = cur ? cur + ' ' + w : w; if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; } else cur = test; }
+  if (cur) lines.push(cur); return lines;
+}
+function textC(s, x, y, col = C.text, a = 1) { ctx.save(); ctx.globalAlpha *= a; ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillText(s, x, y); ctx.restore(); }
+function textL(s, x, y, col = C.text, a = 1) { ctx.save(); ctx.globalAlpha *= a; ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText(s, x, y); ctx.restore(); }
+
+// ---- the red line: hand-drawn strike, drawn progressively -------------------
+function strike(x0, y0, x1, y1, p, seed, width = 8, col = C.red) {
+  if (p <= 0) return; const r = rng(seed); const n = 24; const pts = [];
+  for (let i = 0; i <= n; i++) { const k = i / n; pts.push([lerp(x0, x1, k) + (r() - .5) * 3, lerp(y0, y1, k) + Math.sin(k * 3.1 + seed) * 3 + (r() - .5) * 2.5]); }
+  const m = Math.max(1, Math.floor(n * clamp(p))); const frac = n * clamp(p) - m;
+  ctx.save(); ctx.strokeStyle = col; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const [lw, a] of [[width, .95], [width * .45, .5]]) {
+    ctx.lineWidth = lw; ctx.globalAlpha = a; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1] + (lw < width ? -1.5 : 0));
+    for (let i = 1; i <= m; i++) ctx.lineTo(pts[i][0], pts[i][1] + (lw < width ? -1.5 : 0));
+    if (m < n && frac > 0) ctx.lineTo(lerp(pts[m][0], pts[m + 1][0], frac), lerp(pts[m][1], pts[m + 1][1], frac));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+// hand-drawn circle (used for emphasis)
+function ring(cx, cy, rx, ry, p, seed) {
+  if (p <= 0) return; const r = rng(seed); ctx.save(); ctx.strokeStyle = C.red; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath();
+  const n = 60, end = 1.12 * clamp(p);
+  for (let i = 0; i <= n * end; i++) { const a = -2.2 + i / n * 6.283; const j = 1 + (r() - .5) * .03 + i / n * .05; const x = cx + Math.cos(a) * rx * j, y = cy + Math.sin(a) * ry * j; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.stroke(); ctx.restore();
+}
+
+// ---- lower third citation -----------------------------------------------
+function lowerThird(s, t, a0, a1) {
+  const a = fade(t, a0, .5) * (1 - fade(t, a1 - .5, .5)); if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a; font(30, SERIF, 400, 'italic');
+  const w = ctx.measureText(s).width; const x = 120, y = 880;
+  ctx.fillStyle = 'rgba(15,12,10,.72)'; ctx.fillRect(x - 24, y - 44, w + 60, 64);
+  ctx.fillStyle = C.red; ctx.fillRect(x - 24, y - 44, 5, 64);
+  textL(s, x + 6, y, C.text); ctx.restore();
+}
+
+// ---- illustrations --------------------------------------------------------
+function poppy(x, y, s, t, seed, grey = 0) {
+  const [bx, by, br] = boil(t, seed); ctx.save(); ctx.translate(x + bx, y + by); ctx.rotate(br); ctx.scale(s, s);
+  const petal = grey ? '#6d625a' : '#c0392b', petal2 = grey ? '#5b514a' : '#9e2a1f';
+  ctx.strokeStyle = grey ? '#4e5a45' : '#4f7a3a'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 20); ctx.bezierCurveTo(10, 120, -18, 200, 6, 300); ctx.stroke();
+  const pet = (a, c) => { ctx.save(); ctx.rotate(a); ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(-70, -20, -80, -110, -10, -118); ctx.bezierCurveTo(50, -120, 75, -30, 0, 0); ctx.fill(); ctx.restore(); };
+  pet(-.9, petal2); pet(.9, petal2); pet(-.35, petal); pet(.35, petal);
+  ctx.fillStyle = '#1b1411'; ctx.beginPath(); ctx.arc(0, -8, 22, 0, 6.28); ctx.fill();
+  ctx.fillStyle = grey ? '#555' : '#6c7a3c'; ctx.beginPath(); ctx.ellipse(0, -14, 12, 9, 0, 0, 6.28); ctx.fill();
+  ctx.restore();
+}
+// Colocynth: round, mottled green-and-cream gourd, small stalk.
+function gourd(x, y, s, t, seed, rot = 0) {
+  const [bx, by, br] = boil(t, seed); ctx.save(); ctx.translate(x + bx, y + by); ctx.rotate(rot + br); ctx.scale(s, s);
+  const R = 60;
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 6;
+  ctx.fillStyle = '#6f8a3a'; ctx.beginPath(); ctx.ellipse(0, 0, R * 1.04, R, 0, 0, 6.28); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(0, 0, R * 1.04, R, 0, 0, 6.28); ctx.clip();
+  const r = rng(seed);
+  for (let i = 0; i < 9; i++) { // pale mottled stripes, pole to pole
+    const a = -1.2 + i * .3; ctx.strokeStyle = 'rgba(226,220,160,.55)'; ctx.lineWidth = 7 + r() * 5; ctx.beginPath();
+    for (let k = 0; k <= 12; k++) { const yy = -R + k / 12 * 2 * R; const xx = Math.sin(a) * Math.sqrt(Math.max(0, R * R - yy * yy)) * 1.04 + (r() - .5) * 5; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); }
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(40,55,20,.35)'; for (let i = 0; i < 26; i++) { ctx.beginPath(); ctx.ellipse((r() - .5) * 2 * R, (r() - .5) * 2 * R, 3 + r() * 7, 2 + r() * 4, r() * 3, 0, 6.28); ctx.fill(); }
+  const hl = ctx.createRadialGradient(-22, -26, 4, -10, -10, R * 1.3); hl.addColorStop(0, 'rgba(255,255,220,.35)'); hl.addColorStop(1, 'rgba(0,0,0,.35)'); ctx.fillStyle = hl; ctx.fillRect(-R * 1.2, -R * 1.2, R * 2.4, R * 2.4);
+  ctx.globalAlpha = .45; ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = ctx.createPattern(GRAIN_PAPER, 'repeat'); ctx.fillRect(-R * 1.2, -R * 1.2, R * 2.4, R * 2.4);
+  ctx.restore();
+  ctx.strokeStyle = '#5a4a2a'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, -R + 4); ctx.quadraticCurveTo(6, -R - 14, 18, -R - 20); ctx.stroke();
+  ctx.restore();
+}
+function tablet(x, y, w, h, t, seed, opts = {}) {
+  const [bx, by, br] = boil(t, seed, .8); ctx.save(); ctx.translate(x + bx, y + by); ctx.rotate(br + (opts.rot || 0));
+  // pillowy clay tablet
+  ctx.beginPath(); const rr = Math.min(w, h) * .18; ctx.roundRect(-w / 2, -h / 2, w, h, rr);
+  paperFill(opts.fill || C.clay, .7);
+  const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2); g.addColorStop(0, 'rgba(255,230,190,.22)'); g.addColorStop(1, 'rgba(0,0,0,.28)');
+  ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, rr); ctx.fillStyle = g; ctx.fill();
+  if (opts.marks !== false) { // proto-cuneiform style numeral impressions: circles and D-shapes in ruled cases
+    const r = rng(seed + 5); const rows = opts.rows || 3; const pad = w * .1;
+    ctx.strokeStyle = 'rgba(60,40,25,.55)'; ctx.lineWidth = 2;
+    for (let i = 1; i < rows; i++) { const yy = -h / 2 + i * h / rows; ctx.beginPath(); ctx.moveTo(-w / 2 + pad * .6, yy); ctx.lineTo(w / 2 - pad * .6, yy); ctx.stroke(); }
+    for (let i = 0; i < rows; i++) {
+      const cy = -h / 2 + (i + .5) * h / rows; let cx = -w / 2 + pad; const n = 2 + Math.floor(r() * 4); const sz = Math.min(h / rows * .28, w * .06);
+      for (let k = 0; k < n; k++) { impress(cx, cy, sz, r() < .5); cx += sz * 2.6; }
+    }
+  }
+  ctx.restore();
+}
+function impress(x, y, s, round) {
+  ctx.save(); ctx.fillStyle = 'rgba(55,35,20,.55)';
+  ctx.beginPath(); if (round) ctx.arc(x, y, s, 0, 6.28); else { ctx.ellipse(x, y, s * 1.3, s * .8, 0, Math.PI * .5, Math.PI * 1.5, true); ctx.closePath(); } ctx.fill();
+  ctx.strokeStyle = 'rgba(255,225,180,.3)'; ctx.lineWidth = 1.5; ctx.beginPath(); if (round) ctx.arc(x + 1, y + 1, s, .2, 2.2); else ctx.ellipse(x + 1, y + 1, s * 1.3, s * .8, 0, -.2, 1.4); ctx.stroke(); ctx.restore();
+}
+function jar(x, y, s, t, seed, fill = C.clay) {
+  const [bx, by, br] = boil(t, seed); ctx.save(); ctx.translate(x + bx, y + by); ctx.rotate(br); ctx.scale(s, s);
+  ctx.beginPath(); ctx.moveTo(-28, -120); ctx.lineTo(28, -120); ctx.lineTo(24, -100); ctx.bezierCurveTo(95, -80, 95, 40, 40, 110); ctx.lineTo(-40, 110); ctx.bezierCurveTo(-95, 40, -95, -80, -24, -100); ctx.closePath();
+  paperFill(fill, .7);
+  ctx.strokeStyle = 'rgba(60,35,20,.4)'; ctx.lineWidth = 3; for (const yy of [-60, -40]) { ctx.beginPath(); ctx.moveTo(-70, yy); ctx.quadraticCurveTo(0, yy + 10, 70, yy); ctx.stroke(); }
+  ctx.restore();
+}
+function pyramidDusk(t, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  const sky = ctx.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#1b1a2c'); sky.addColorStop(.55, '#6b3a2e'); sky.addColorStop(.75, '#c9774a'); sky.addColorStop(1, '#3a2418');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(255,200,140,.6)'; ctx.beginPath(); ctx.arc(1320, 760, 60, 0, 6.28); ctx.fill();
+  const tri = (cx, base, hw, hh, col, seed) => { const [bx, by] = boil(t, seed, .8); ctx.beginPath(); ctx.moveTo(cx - hw + bx, base + by); ctx.lineTo(cx + bx, base - hh + by); ctx.lineTo(cx + hw + bx, base + by); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); };
+  tri(1500, 860, 150, 150, '#2a1c16', 3); tri(700, 860, 380, 380, '#1f1511', 1); tri(1150, 860, 300, 300, '#241813', 2);
+  ctx.fillStyle = '#140d0a'; ctx.fillRect(0, 855, W, H);
+  ctx.globalAlpha = a * .35; ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = ctx.createPattern(GRAIN_PAPER, 'repeat'); ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+function grainIcon(x, y, s, col = C.ink) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, 40); ctx.lineTo(0, -34); ctx.stroke(); for (let i = 0; i < 5; i++) { const yy = 20 - i * 12; for (const sd of [-1, 1]) { ctx.beginPath(); ctx.ellipse(sd * 7, yy - 4, 4, 9, sd * .5, 0, 6.28); ctx.fill(); } } ctx.restore(); }
+function sheepIcon(x, y, s, col = C.ink) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, 36, 22, 0, 0, 6.28); ctx.fill(); ctx.beginPath(); ctx.ellipse(36, -12, 12, 9, -.5, 0, 6.28); ctx.fill(); ctx.fillRect(-24, 12, 6, 24); ctx.fillRect(18, 12, 6, 24); ctx.restore(); }
+function storehouse(x, y, s, t) {
+  const [bx, by] = boil(t, 77, .7); ctx.save(); ctx.translate(x + bx, y + by); ctx.scale(s, s);
+  ctx.beginPath(); ctx.moveTo(-130, -20); ctx.lineTo(0, -120); ctx.lineTo(130, -20); ctx.lineTo(110, -20); ctx.lineTo(110, 120); ctx.lineTo(-110, 120); ctx.lineTo(-110, -20); ctx.closePath(); paperFill(C.clayDark, .6);
+  ctx.fillStyle = '#1a120c'; ctx.beginPath(); ctx.roundRect(-35, 30, 70, 90, [35, 35, 0, 0]); ctx.fill(); ctx.restore();
+}
+// Book spine / title card / generic web page — the sentence repeated everywhere. No real logos.
+const SHORT = 'The Sumerians referred to it as Hul Gil, the “joy plant.”';
+function spine(x, y, h, t, seed, col) {
+  const [bx, by] = boil(t, seed, .6); ctx.save(); ctx.translate(x + bx, y + by);
+  card(-26, -h / 2, 52, h, seed, col, .5); ctx.rotate(-Math.PI / 2); font(18, SERIF, 600); textC('“the joy plant”', 0, 6, '#f0e3c6'); ctx.restore();
+}
+function webBox(x, y, w, t, seed) {
+  const [bx, by] = boil(t, seed, .6); ctx.save(); ctx.translate(x + bx, y + by);
+  card(0, 0, w, w * .55, seed, '#dcd6cc', .3); ctx.fillStyle = '#8a857c'; ctx.fillRect(4, 4, w - 8, 18);
+  for (let i = 0; i < 3; i++) { ctx.fillStyle = ['#b34', '#ca5', '#5a5'][i]; ctx.beginPath(); ctx.arc(16 + i * 14, 13, 4, 0, 6.28); ctx.fill(); }
+  font(Math.round(w / 17), SERIF); ctx.fillStyle = C.ink; wrap(SHORT, w - 30).forEach((l, i) => textL(l, 15, 52 + i * w / 14, C.ink)); ctx.restore();
+}
+function titleCard(x, y, w, t, seed) {
+  const [bx, by] = boil(t, seed, .6); ctx.save(); ctx.translate(x + bx, y + by);
+  card(0, 0, w, w * .5, seed, '#231d18', .2); font(Math.round(w / 13), SERIF, 400, 'italic');
+  wrap('Hul Gil, the “joy plant.”', w - 30).forEach((l, i) => textC(l, w / 2, w * .22 + i * w / 11, C.text)); ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// TIMELINE. Each shot = narration lines + a draw function.
+// Guide timing: 150 wpm → 0.4 s per word, plus a pause after each line.
+// ---------------------------------------------------------------------------
+const SPW = 0.4;
+const words = s => s.trim().split(/\s+/).length;
+
+const CHIPS = ['3400 B.C.', 'The Sumerians', '“joy plant”', 'opium poppy'];
+// chip layout: mode 0 = big centre row, 1 = small strip at top
+function chipBoxes(mode) {
+  const size = mode ? 30 : 54; font(size, SERIF, 600); const pad = mode ? 22 : 34, gap = mode ? 22 : 40;
+  const ws = CHIPS.map(s => ctx.measureText(s).width + pad * 2); const total = ws.reduce((a, b) => a + b) + gap * 3;
+  let x = (W - total) / 2; const y = mode ? 70 : 520; const h = mode ? 58 : 104;
+  return ws.map(w => { const b = { x, y, w, h, size }; x += w + gap; return b; });
+}
+function drawChips(t, mode, state) {
+  // state: [{active, strikeP, alpha}] per chip
+  const A = chipBoxes(0), B = chipBoxes(1);
+  CHIPS.forEach((s, i) => {
+    const st = state[i]; if (st.alpha <= 0) return;
+    const b = { x: lerp(A[i].x, B[i].x, mode), y: lerp(A[i].y, B[i].y, mode), w: lerp(A[i].w, B[i].w, mode), h: lerp(A[i].h, B[i].h, mode), size: lerp(A[i].size, B[i].size, mode) };
+    const [bx, by] = boil(t, 300 + i, .6);
+    ctx.save(); ctx.globalAlpha = st.alpha; ctx.translate(bx, by);
+    card(b.x, b.y, b.w, b.h, 40 + i, st.active ? C.paper : C.paperDark, .45);
+    font(Math.round(b.size), SERIF, 600); textC(s, b.x + b.w / 2, b.y + b.h * .66, C.ink, st.active || mode < 1 ? 1 : .7);
+    strike(b.x + 10, b.y + b.h * .52, b.x + b.w - 10, b.y + b.h * .48, st.strikeP, 60 + i, mode ? 6 : 9);
+    ctx.restore();
+  });
+}
+// Which chips are struck by global time: filled in after the timeline is built.
+let CHIP_STRIKE_T = [1e9, 1e9, 1e9, 1e9];
+function chipState(T, active) { return CHIPS.map((_, i) => ({ active: i === active, alpha: 1, strikeP: ramp(T, CHIP_STRIKE_T[i], CHIP_STRIKE_T[i] + .7) })); }
+
+const SHOTS = [
+  // ===== SCENE 1 — COLD OPEN =====
+  { id: 'dea', scene: 'Scene 1 — Cold open', pad: 1.2,
+    lines: [
+      "There's a page on the website of the Drug Enforcement Administration Museum, an institution of the United States federal government, and it says this.",
+      "The earliest reference to opium growth and use is in 3400 B.C. when the opium poppy was cultivated in lower Mesopotamia. The Sumerians referred to it as Hul Gil, the 'joy plant.'",
+    ],
+    draw(t, S) {
+      ctx.fillStyle = '#070606'; ctx.fillRect(0, 0, W, H);
+      const q = '“The earliest reference to opium growth and use is in 3400 B.C. when the opium poppy was cultivated in lower Mesopotamia. The Sumerians referred to it as Hul Gil, the ‘joy plant.’”';
+      const [c1, d1] = [S.cues[1], S.durs[1]];
+      const n = Math.floor(q.length * ramp(t, c1 - .2, c1 + d1 * .92));
+      font(46, MONO); const lines = wrap(q, 1380); let left = n; const y0 = 330;
+      lines.forEach((l, i) => { const s = l.slice(0, Math.max(0, left)); left -= l.length + 1; textL(s, 270, y0 + i * 70, C.text); });
+      // cursor
+      if (Math.floor(t * 2) % 2 === 0 || (n > 0 && n < q.length)) {
+        let li = 0, rem = n; while (li < lines.length - 1 && rem > lines[li].length) { rem -= lines[li].length + 1; li++; }
+        const cx = 270 + ctx.measureText(lines[li].slice(0, Math.max(0, rem))).width + 4; ctx.fillStyle = C.text; ctx.fillRect(cx, y0 + li * 70 - 40, 24, 50);
+      }
+      font(32, SERIF, 400, 'italic'); textL('— Drug Enforcement Administration Museum, Arlington, Virginia', 270, 330 + lines.length * 70 + 70, C.dim, fade(t, .6, .8));
+    } },
+  { id: 'multiply', pad: .4,
+    lines: ["You have almost certainly met that sentence. It's in hundreds of books. It's been on the PBS Frontline website for a quarter of a century. It opens more histories of opium than any other fact, because it's a wonderful way to begin: the oldest drug, the oldest civilisation, and a name so perfect it feels like the whole subject in two words."],
+    draw(t, S) {
+      ground(t); const r = rng(99); const N = 42;
+      for (let i = 0; i < N; i++) {
+        const kind = i % 3; const appear = S.dur * .8 * Math.pow(i / N, .85);
+        const x = 80 + r() * (W - 400), y = 60 + r() * (H - 380), vx = (r() - .5) * 24, vy = (r() - .5) * 14; const a = fade(t, appear, .6);
+        if (a <= 0) continue; const tt = t - appear; ctx.save(); ctx.globalAlpha = a * .95;
+        if (kind === 0) spine(x + vx * tt, y + 120 + vy * tt, 260, t, i, ['#5b2c22', '#2f3b33', '#3b3150', '#6a5230'][i % 4]);
+        else if (kind === 1) webBox(x + vx * tt, y + vy * tt, 300, t, i); else titleCard(x + vx * tt, y + vy * tt, 320, t, i);
+        ctx.restore();
+      }
+      vignette();
+    } },
+  { id: 'hold', pad: 1.4, lead: 1.6,
+    lines: ["Every part of it is wrong.", "Not exaggerated. Not simplified. It's wrong on the date, wrong on the language, wrong on the translation, and wrong about the plant."],
+    draw(t, S) {
+      ground(t); font(64, SERIF); textC(SHORT, W / 2, 470, C.text, fade(t, .1, 1));
+      const items = ['the date', 'the language', 'the translation', 'the plant']; const base = S.cues[1];
+      const wIdx = [8, 12, 16, 21]; // word index in line 2 where each item is spoken
+      font(40, SERIF, 400, 'italic');
+      items.forEach((s, i) => { const x = W / 2 + (i - 1.5) * 330; textC(s, x, 640, C.dim, fade(t, base + wIdx[i] * SPW, .4)); strike(x - 110, 628, x + 110, 626, ramp(t, base + wIdx[i] * SPW + .3, base + wIdx[i] * SPW + .8), 400 + i, 5); });
+      vignette();
+    } },
+  { id: 'strike', pad: 1.8, lead: .4,
+    lines: ["The joy plant was, almost certainly, a stinking cucumber."],
+    draw(t, S) {
+      ground(t); font(64, SERIF); textC(SHORT, W / 2, 470, C.text);
+      const full = ctx.measureText(SHORT).width; const pre = ctx.measureText('The Sumerians referred to it as Hul Gil, the “').width; const jp = ctx.measureText('joy plant').width;
+      const x0 = W / 2 - full / 2 + pre;
+      strike(x0 - 8, 452, x0 + jp + 8, 448, ramp(t, .2, .9), 7, 10);
+      const k = easeOut(ramp(t, .9, 2.6)); const gx = lerp(W + 150, x0 + jp / 2, k); const rot = (1 - k) * 9;
+      gourd(gx, 640, 1.1, t, 5, -rot);
+      vignette();
+    } },
+  { id: 'montage', pad: .8,
+    lines: ["By the end of this video you'll know how a mistranslated cucumber ended up on a federal drug agency's website, what the oldest real evidence of opium actually is, and why the world's oldest beer recipe may not be a recipe, or even beer.",
+      "If you appreciate this type of content, gently tap that like button. Here we go."],
+    draw(t, S) {
+      ground(t); const d0 = S.durs[0]; const seg = d0 / 3;
+      const a1 = fade(t, 0, .5) * (1 - fade(t, seg, .5)), a2 = fade(t, seg, .5) * (1 - fade(t, seg * 2, .5)), a3 = fade(t, seg * 2, .5);
+      if (a1 > 0) { ctx.save(); ctx.globalAlpha = a1; const z = 1 + t * .02; tablet(W / 2, H / 2 - 30, 520 * z, 380 * z, t, 31, { rows: 4 }); ctx.restore(); }
+      if (a2 > 0) { ctx.save(); ctx.globalAlpha = a2; const z = 1.6 + (t - seg) * .03; jar(W / 2, H / 2 - 10, z, t, 32); ctx.restore(); }
+      if (a3 > 0) pyramidDusk(t, a3);
+      vignette();
+    } },
+  { id: 'title', pad: 0, lead: 5.5, lines: [],
+    draw(t, S) {
+      ground(t, '#0d0b09'); const a = fade(t, .2, 1) * (1 - fade(t, S.dur - .7, .6));
+      ctx.save(); ctx.globalAlpha = a;
+      font(34, SERIF, 600); ctx.save(); ctx.letterSpacing = '12px'; textC('VICE & VERSA  ·  CHAPTER ONE', W / 2, 380, C.dim); ctx.restore();
+      font(150, SERIF, 400); textC('The Joy Plant', W / 2, 560, C.text);
+      strike(W / 2 - 330, 612, W / 2 + 330, 606, ramp(t, 1.2, 2.2), 12, 7);
+      font(42, SERIF, 400, 'italic'); textC('Three things everybody knows about ancient intoxication', W / 2, 700, C.dim);
+      ctx.restore(); vignette();
+    } },
+  // ===== SCENE 3 — FOUR THINGS WRONG WITH ONE SENTENCE =====
+  { id: 'chips', scene: 'Scene 3 — Four things wrong with one sentence', pad: 0, lead: 4.2, lines: [],
+    draw(t, S) {
+      ground(t); const mode = ease(ramp(t, S.dur - 1.1, S.dur));
+      font(40, SERIF, 400, 'italic'); textC('Four things wrong with one sentence', W / 2, 380, C.dim, fade(t, .2, .6) * (1 - mode));
+      drawChips(t, mode, CHIPS.map((_, i) => ({ active: true, alpha: fade(t, .5 + i * .45, .4), strikeP: 0 })));
+      vignette();
+    } },
+  { id: 'one', pad: 1.0,
+    lines: ["One. The date is before writing.",
+      "Proto-cuneiform, among the earliest writing anywhere, begins somewhere around 3350 to 3300 BC. In 3400 BC there is nothing to write a word like hul gil in. In Mesopotamia, nobody was writing anything down yet."],
+    strikeAfterLine: 0,
+    draw(t, S) {
+      ground(t); drawChips(t, 1, chipState(S.T0 + t, 0));
+      // timeline 3600 → 2800 BC
+      const X = yr => lerp(180, 1740, (3600 - yr) / 800); const y = 600;
+      const reveal = ease(ramp(t, .2, 1.6));
+      ctx.save(); ctx.strokeStyle = C.dim; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(180, y); ctx.lineTo(lerp(180, 1740, reveal), y); ctx.stroke();
+      font(26, SERIF); for (let yr = 3600; yr >= 2800; yr -= 100) { const x = X(yr); if (x > lerp(180, 1740, reveal)) continue; ctx.fillStyle = C.dim; ctx.fillRect(x - 1, y - 10, 2, 20); textC(yr + ' BC', x, y + 50, C.dim); }
+      ctx.restore();
+      // 3400 marker in darkness
+      const ma = fade(t, 1.2, .5); ctx.save(); ctx.globalAlpha = ma; ctx.fillStyle = C.text; ctx.beginPath(); ctx.moveTo(X(3400), y - 14); ctx.lineTo(X(3400) - 14, y - 40); ctx.lineTo(X(3400) + 14, y - 40); ctx.fill();
+      font(34, SERIF, 600); textC('3400 B.C. — the claim', X(3400), y - 62, C.text); font(28, SERIF, 400, 'italic'); textC('(no writing yet)', X(3400), y - 24 - 80, C.dim, fade(t, S.cues[1] + 18 * SPW, .5)); ctx.restore();
+      // proto-cuneiform band + tablets
+      const c1 = S.cues[1]; const ba = fade(t, c1, .6);
+      ctx.save(); ctx.globalAlpha = ba * .35; ctx.fillStyle = C.clayLight; ctx.fillRect(X(3350), y - 150, X(3300) - X(3350), 150); ctx.restore();
+      font(28, SERIF, 400, 'italic'); textC('proto-cuneiform', (X(3350) + X(3300)) / 2 + 30, y - 170, C.clayLight, ba);
+      for (let i = 0; i < 9; i++) { const yr = 3320 - i * 55; const a = fade(t, c1 + .5 + i * .35, .4); if (a <= 0) continue; ctx.save(); ctx.globalAlpha = a; tablet(X(yr), y + 150 + (i % 2) * 30, 90, 66, t, 500 + i, { rows: 2 }); ctx.restore(); }
+      lowerThird('Earliest Mesopotamian writing: proto-cuneiform, c. 3350–3300 BC', t, c1 + .4, S.dur);
+      vignette();
+    } },
+  { id: 'two', pad: 1.0,
+    lines: ["Two. The language can't be identified.",
+      "When writing does appear, the earliest tablets are administrative: goods in, goods out of institutional stores. They aren't trying to write down speech, and they contain almost no evidence of what language their writers spoke. Sumerian is only securely recorded from around 3000 to 2900 BC.",
+      "So the claim gives a phrase to a people whose language, at that date, can't be read off the tablets at all."],
+    strikeAfterLine: 0,
+    draw(t, S) {
+      ground(t); drawChips(t, 1, chipState(S.T0 + t, 1));
+      const a = fade(t, .3, .8); ctx.save(); ctx.globalAlpha = a;
+      storehouse(1230, 560, 1.4, t);
+      // goods moving in and out of the store, looping
+      for (let i = 0; i < 6; i++) {
+        const ph = ((t * .22 + i / 6) % 1); const inbound = i % 2 === 0; const k = inbound ? ph : 1 - ph;
+        const x = lerp(1830, 1300, k) , yy = 700 + (i % 3) * 30; const al = Math.sin(ph * Math.PI);
+        ctx.save(); ctx.globalAlpha = a * al; (i % 3 === 1 ? sheepIcon : grainIcon)(x, yy, 1, C.paperDark); ctx.restore();
+      }
+      // the ledger tablet: pictograms + numeral impressions
+      tablet(560, 560, 560, 400, t, 71, { rows: 3 });
+      const r = rng(72); ctx.save(); const [bx, by] = boil(t, 71, .8); ctx.translate(bx, by);
+      for (let i = 0; i < 3; i++) { const yy = 560 - 200 + (i + .5) * 400 / 3; (i === 1 ? sheepIcon : grainIcon)(730, yy + 4, .7, 'rgba(55,35,20,.6)'); }
+      ctx.restore(); ctx.restore();
+      // "speech?" note
+      const c1 = S.cues[1]; const q = fade(t, c1 + 20 * SPW, .5);
+      font(34, SERIF, 400, 'italic'); textC('goods in · goods out', 560, 820, C.dim, fade(t, c1 + 4 * SPW, .5));
+      textC('— whose language? —', 560, 300, C.text, q);
+      vignette();
+    } },
+  { id: 'three', pad: 1.0,
+    lines: ["Three. The signs don't mean \"joy plant.\"",
+      "The reading rests on two signs. The first, ḪÚL, can carry a sense of rejoicing. But the second, GÍL, doesn't mean plant. It means something closer to stinking, or foul.",
+      "The Sumerian marker that actually tells you a word is a plant is a different sign entirely. The reading Assyriologists accept now is a compound meaning, roughly, a bitter or foul cucurbit."],
+    strikeAfterLine: 0,
+    draw(t, S) {
+      ground(t); drawChips(t, 1, chipState(S.T0 + t, 2));
+      const c1 = S.cues[1], c2 = S.cues[2];
+      const warm = fade(t, c1 + 13 * SPW, .8), sick = fade(t, c1 + 25 * SPW, .8);
+      const slide = ease(ramp(t, c2, c2 + 1)); const x1 = lerp(720, 560, slide), x2 = lerp(1200, 1000, slide);
+      const tile = (x, label, glow, glowCol, seed) => {
+        ctx.save(); if (glow > 0) { ctx.shadowColor = glowCol; ctx.shadowBlur = 70 * glow; }
+        tablet(x, 520, 360, 360, t, seed, { marks: false, fill: C.clay }); ctx.restore();
+        if (glow > 0) { ctx.save(); ctx.globalAlpha = glow * .35; ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = glowCol; ctx.beginPath(); ctx.roundRect(x - 180, 340, 360, 360, 64); ctx.fill(); ctx.restore(); }
+        const [bx, by] = boil(t, seed, .8); font(120, SERIF, 600);
+        textC(label, x + bx + 2, 565 + by + 3, 'rgba(255,230,190,.35)'); textC(label, x + bx, 565 + by, '#3a2616');
+      };
+      ctx.save(); ctx.globalAlpha = fade(t, .3, .6);
+      tile(x1, 'ḪÚL', warm, C.warm, 81); tile(x2, 'GÍL', sick, C.sick, 82); ctx.restore();
+      font(34, SERIF, 400, 'italic');
+      textC('“rejoicing”', x1, 770, C.warm, warm); textC('“stinking, foul”', x2, 770, C.sick, sick);
+      textC('not “plant”', x2, 820, C.dim, fade(t, c1 + 19 * SPW, .5));
+      // third tile: the real plant marker, a different sign
+      const a3 = fade(t, c2 + .8, .6); if (a3 > 0) { ctx.save(); ctx.globalAlpha = a3; tablet(1440, 520, 300, 300, t, 83, { marks: false, fill: C.clayDark }); font(110, SERIF, 400); textC('?', 1440, 560, 'rgba(240,220,190,.7)'); ctx.restore(); font(30, SERIF, 400, 'italic'); textC('the plant marker —', 1440, 730, C.dim, a3); textC('a different sign', 1440, 768, C.dim, a3); }
+      const a4 = fade(t, c2 + 20 * SPW, .6); if (a4 > 0) { ctx.save(); ctx.globalAlpha = a4; card(610, 190, 700, 84, 90, C.paper, .4); font(40, SERIF, 400, 'italic'); textC('≈ “bitter / foul cucurbit”', 960, 245, C.ink); ctx.restore(); }
+      font(22, SANS); textL('Signs shown in transliteration', 60, 1040, 'rgba(200,190,170,.45)', fade(t, .3, .5));
+      vignette();
+    } },
+  { id: 'four', pad: 1.0,
+    lines: ["Four. The plant is probably a bitter gourd.",
+      "Most likely it's colocynth, Citrullus colocynthis, the bitter apple. It's a desert gourd, botanically a cousin of the watermelon, that was used as a violent purgative.",
+      "Barbara Böck, whose 2023 herbal with Kew is the current standard reference on Mesopotamian plants, says the opium poppy is simply absent from the cuneiform record, or else hidden behind one of the many plant names nobody has been able to identify."],
+    strikeAfterLine: 0,
+    draw(t, S) {
+      ground(t); drawChips(t, 1, chipState(S.T0 + t, 3));
+      const c1 = S.cues[1], c2 = S.cues[2]; const a = fade(t, .3, .8);
+      ctx.save(); ctx.globalAlpha = a; const [bx, by] = boil(t, 91, .6); ctx.translate(bx, by);
+      card(560, 170, 800, 640, 91, C.paper, .55);
+      ctx.strokeStyle = 'rgba(42,33,26,.35)'; ctx.lineWidth = 2; ctx.strokeRect(590, 200, 740, 580);
+      // vine, lobed leaf, tendril
+      ctx.strokeStyle = '#4f6a2e'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(640, 360); ctx.bezierCurveTo(760, 300, 880, 420, 960, 400); ctx.stroke();
+      ctx.lineWidth = 2.5; ctx.beginPath(); for (let i = 0; i < 40; i++) { const a2 = i * .5, rr = 26 - i * .55; const x = 700 + Math.cos(a2) * rr + i * .8, y = 300 + Math.sin(a2) * rr; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
+      ctx.fillStyle = '#5d7a35'; ctx.save(); ctx.translate(820, 330); ctx.rotate(-.4); ctx.beginPath();
+      for (let i = 0; i <= 60; i++) { const th = i / 60 * 6.283; const rr = 70 * (0.55 + 0.45 * Math.abs(Math.cos(th * 2.5))); ctx.lineTo(Math.cos(th) * rr, Math.sin(th) * rr * .8); } ctx.fill(); ctx.restore();
+      gourd(960, 490, 2.0, t, 92);
+      font(52, SERIF, 400, 'italic'); textC('Citrullus colocynthis', 960, 690, C.ink, fade(t, c1 + 3 * SPW, .6));
+      font(34, SERIF); textC('colocynth · the bitter apple', 960, 735, 'rgba(42,33,26,.8)', fade(t, c1 + 6 * SPW, .6));
+      font(26, SERIF, 400, 'italic'); textC('desert gourd · watermelon genus · a violent purgative', 960, 775, 'rgba(42,33,26,.6)', fade(t, c1 + 12 * SPW, .6));
+      ctx.restore();
+      lowerThird('Böck, Ghazanfar & Nesbitt, An Ancient Mesopotamian Herbal, Kew Publishing, 2023', t, c2, S.dur);
+      vignette();
+    } },
+  { id: 'resolve', pad: 2.4, lead: .8,
+    lines: ["The joy plant was, almost certainly, a stinking cucumber."],
+    draw(t, S) {
+      ground(t); drawChips(t, 1, chipState(S.T0 + t, -1));
+      const k = ease(ramp(t, .4, 2.2));
+      ctx.save(); ctx.globalAlpha = 1 - k * .85; poppy(960 - k * 360, 560 + k * 60, 1.3, t, 201, k > .3 ? 1 : 0); ctx.restore();
+      if (k > .05) strike(960 - k * 360 - 120, 500 + k * 60, 960 - k * 360 + 120, 520 + k * 60, ramp(t, .6, 1.2), 88, 8);
+      gourd(lerp(1500, 960, easeOut(ramp(t, 1.0, 2.6))), 560, 1.8, t, 202, (1 - easeOut(ramp(t, 1.0, 2.6))) * 6);
+      vignette();
+    } },
+  { id: 'end', pad: 0, lead: 3.5, lines: [],
+    draw(t, S) { ctx.fillStyle = '#070606'; ctx.fillRect(0, 0, W, H); font(30, SERIF, 400, 'italic'); textC('End of pilot · the film continues with Scene 4, “Where it came from”', W / 2, H / 2, C.dim, fade(t, .3, .6) * (1 - fade(t, S.dur - .8, .6))); } },
+];
+
+// ---- build timing -----------------------------------------------------------
+// Caption chunks: split lines at sentence ends and commas into chunks of ≤ 14 words.
+function chunks(line) {
+  line = line.replace(/B\.C\./g, 'B․C․'); // keep abbreviations whole
+  const parts = line.match(/[^.!?:;]+[.!?:;]+["'”’]?\s*|[^.!?:;]+$/g) || [line]; const out = [];
+  for (let p of parts) { p = p.trim(); if (!p) continue; let ws = p.split(/\s+/);
+    while (ws.length > 14) { let cut = ws.slice(0, 14).findLastIndex(w => /,$/.test(w)); cut = cut >= 5 ? cut + 1 : 12; out.push(ws.slice(0, cut).join(' ')); ws = ws.slice(cut); }
+    out.push(ws.join(' ')); }
+  return out.map(c => c.replace(/․/g, '.'));
+}
+let T = 0; const CAPTIONS = [];
+for (const S of SHOTS) {
+  S.T0 = T; S.cues = []; S.durs = []; let t = S.lead || .3;
+  S.lines.forEach((ln, li) => {
+    S.cues.push(t); let ct = t;
+    for (const ch of chunks(ln)) { const d = words(ch) * SPW; CAPTIONS.push({ start: S.T0 + ct, end: S.T0 + ct + d, text: ch }); ct += d; }
+    const d = words(ln) * SPW; S.durs.push(d); t += d + (li < S.lines.length - 1 ? .6 : 0);
+    if (S.strikeAfterLine === li) CHIP_STRIKE_T[['one', 'two', 'three', 'four'].indexOf(S.id)] = S.T0 + t - .6;
+  });
+  S.dur = t + (S.pad || 0); T += S.dur;
+}
+const TOTAL = T;
+
+function caption(T) {
+  if (!SHOW_CAPTIONS) return; const c = CAPTIONS.find(c => T >= c.start && T < c.end + .15); if (!c) return;
+  font(38, SANS, 400); const w = Math.min(1500, ctx.measureText(c.text).width); const lines = wrap(c.text, 1500);
+  const h = lines.length * 50 + 30, y = 1040 - h;
+  ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.fillRect(W / 2 - w / 2 - 30, y, w + 60, h);
+  lines.forEach((l, i) => textC(l, W / 2, y + 52 + i * 50, '#fff'));
+  font(16, SANS, 600); textL('GUIDE VO', W / 2 - w / 2 - 30, y - 8, 'rgba(255,255,255,.5)');
+}
+
+function renderAt(T) {
+  let S = SHOTS[SHOTS.length - 1]; for (const s of SHOTS) if (T < s.T0 + s.dur) { S = s; break; }
+  const t = T - S.T0; ctx.save(); S.draw(t, S); ctx.restore();
+  // soft cross-dissolve from black at every shot start
+  const a = 1 - fade(t, 0, .35); if (a > 0 && S.id !== 'dea') { ctx.fillStyle = `rgba(0,0,0,${a * .8})`; ctx.fillRect(0, 0, W, H); }
+  caption(T);
+}
+window.renderAt = renderAt;
+window.getInfo = () => ({ total: TOTAL, captions: CAPTIONS, shots: SHOTS.map(s => ({ id: s.id, scene: s.scene || '', start: s.T0, dur: s.dur })) });
+window.frameJPEG = (T, q = .92) => { renderAt(T); return cv.toDataURL('image/jpeg', q); };
+window.ready = (async () => {
+  await Promise.all([`400 46px "IBM Plex Mono"`, `400 40px "EB Garamond"`, `italic 400 40px "EB Garamond"`, `600 40px "EB Garamond"`, `400 38px Inter`, `600 16px Inter`].map(f => document.fonts.load(f, 'ḪÚL GÍL Böck abc')));
+  // re-run the timing pass is font-independent; just draw the first frame
+  renderAt(0); return true;
+})();
+</script>
+</body>
+</html>
