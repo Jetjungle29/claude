@@ -12,6 +12,7 @@
 <body>
 <canvas id="c" width="1920" height="1080"></canvas>
 <script src="kit.js"></script>
+<script src="vo_timing.js" onerror="window.VO_TIMING=null"></script>
 <script>
 'use strict';
 // ---------------------------------------------------------------------------
@@ -278,7 +279,7 @@ function timeline(t, S) {
   font(26, SERIF); for (let yr = 3600; yr >= 2800; yr -= 100) { const x = X(yr); if (x > lerp(180, 1740, reveal)) continue; ctx.fillStyle = '#cbbda6'; ctx.fillRect(x - 1, y - 10, 2, 20); textC(yr + ' BC', x, y + 50, '#cbbda6'); }
   ctx.restore();
   const ma = fade(tt, 1.2, .5); ctx.save(); ctx.globalAlpha *= ma; ctx.fillStyle = C.text; ctx.beginPath(); ctx.moveTo(X(3400), y - 14); ctx.lineTo(X(3400) - 14, y - 40); ctx.lineTo(X(3400) + 14, y - 40); ctx.fill();
-  font(34, SERIF, 600); textC('3400 B.C. — the claim', X(3400) - 60, y - 62, C.text); font(28, SERIF, 400, 'italic'); textC('(no writing yet)', X(3400) - 60, y - 104, '#cbbda6', fade(t, c1 + 18 * SPW, .5)); ctx.restore();
+  font(34, SERIF, 600); textC('3400 B.C. — the claim', X(3400) - 60, y - 62, C.text); font(28, SERIF, 400, 'italic'); textC('(no writing yet)', X(3400) - 60, y - 104, '#cbbda6', fade(t, c1 + 18 * S.spw[1], .5)); ctx.restore();
   const ba = fade(t, c1, .6);
   ctx.save(); ctx.globalAlpha *= ba * .45; ctx.fillStyle = C.clayLight; ctx.fillRect(X(3350), y - 150, X(3300) - X(3350), 150); ctx.restore();
   font(28, SERIF, 400, 'italic'); textC('proto-cuneiform', (X(3350) + X(3300)) / 2 + 40, y - 170, C.clayLight, ba);
@@ -323,12 +324,12 @@ const SHOTS = [
     } },
   { id: 'hold', pad: 1.4, lead: 1.6,
     lines: ["Every part of it is wrong.", "Not exaggerated. Not simplified. It's wrong on the date, wrong on the language, wrong on the translation, and wrong about the plant."],
-    sfx(S) { const b = S.cues[1], w = [8, 12, 16, 21]; return [{ t: S.cues[0] - .5, type: 'pop' }, ...w.map(i => ({ t: b + i * SPW + .3, type: 'scratch' }))]; },
+    sfx(S) { const b = S.cues[1], w = [8, 12, 16, 21]; return [{ t: S.cues[0] - .5, type: 'pop' }, ...w.map(i => ({ t: b + i * S.spw[1] + .3, type: 'scratch' }))]; },
     draw(t, S) {
       KIT.hall(ctx, t, t * 4); wallText(t, 1);
       const items = ['the date', 'the language', 'the translation', 'the plant']; const base = S.cues[1];
       const wIdx = [8, 12, 16, 21]; font(40, SERIF, 400, 'italic');
-      items.forEach((s, i) => { const x = 800 + (i - 1.5) * 300; textC(s, x, 640, '#e9dcc4', fade(t, base + wIdx[i] * SPW, .4)); KIT.strike(ctx, x - 105, 628, x + 105, 624, ramp(t, base + wIdx[i] * SPW + .3, base + wIdx[i] * SPW + .8), 400 + i, 6); });
+      items.forEach((s, i) => { const x = 800 + (i - 1.5) * 300; textC(s, x, 640, '#e9dcc4', fade(t, base + wIdx[i] * S.spw[1], .4)); KIT.strike(ctx, x - 105, 628, x + 105, 624, ramp(t, base + wIdx[i] * S.spw[1] + .3, base + wIdx[i] * S.spw[1] + .8), 400 + i, 6); });
       KIT.avatar(ctx, 1680, 1110, 720, t, Object.assign({ pop: ramp(t, S.cues[0] - .5, S.cues[0] + .5) }, HALL_AV));
       KIT.vignette(ctx, .75); KIT.filmGrain(ctx, t, .3);
     } },
@@ -411,8 +412,8 @@ const SHOTS = [
       for (let i = 0; i < 3; i++) { const yy = 560 - 200 + (i + .5) * 400 / 3; (i === 1 ? sheepIcon : grainIcon)(730, yy + 4, .7, 'rgba(55,35,20,.6)'); }
       ctx.restore(); ctx.restore();
       // "speech?" note
-      const c1 = S.cues[1]; const q = fade(t, c1 + 20 * SPW, .5);
-      font(34, SERIF, 400, 'italic'); textC('goods in · goods out', 560, 820, C.dim, fade(t, c1 + 4 * SPW, .5));
+      const c1 = S.cues[1]; const q = fade(t, c1 + 20 * S.spw[1], .5);
+      font(34, SERIF, 400, 'italic'); textC('goods in · goods out', 560, 820, C.dim, fade(t, c1 + 4 * S.spw[1], .5));
       textC('— whose language? —', 560, 300, C.text, q);
       vignette();
     } },
@@ -424,7 +425,7 @@ const SHOTS = [
     draw(t, S) {
       ground(t); drawChips(t, 1, chipState(S.T0 + t, 2));
       const c1 = S.cues[1], c2 = S.cues[2];
-      const warm = fade(t, c1 + 13 * SPW, .8), sick = fade(t, c1 + 25 * SPW, .8);
+      const warm = fade(t, c1 + 13 * S.spw[1], .8), sick = fade(t, c1 + 25 * S.spw[1], .8);
       const slide = ease(ramp(t, c2, c2 + 1)); const x1 = lerp(720, 560, slide), x2 = lerp(1200, 1000, slide);
       const tile = (x, label, glow, glowCol, seed) => {
         ctx.save(); if (glow > 0) { ctx.shadowColor = glowCol; ctx.shadowBlur = 70 * glow; }
@@ -437,10 +438,10 @@ const SHOTS = [
       tile(x1, 'ḪÚL', warm, C.warm, 81); tile(x2, 'GÍL', sick, C.sick, 82); ctx.restore();
       font(34, SERIF, 400, 'italic');
       textC('“rejoicing”', x1, 770, C.warm, warm); textC('“stinking, foul”', x2, 770, C.sick, sick);
-      textC('not “plant”', x2, 820, C.dim, fade(t, c1 + 19 * SPW, .5));
+      textC('not “plant”', x2, 820, C.dim, fade(t, c1 + 19 * S.spw[1], .5));
       // third tile: the real plant marker, a different sign
       const a3 = fade(t, c2 + .8, .6); if (a3 > 0) { ctx.save(); ctx.globalAlpha = a3; tablet(1440, 520, 300, 300, t, 83, { marks: false, fill: C.clayDark }); font(110, SERIF, 400); textC('?', 1440, 560, 'rgba(240,220,190,.7)'); ctx.restore(); font(30, SERIF, 400, 'italic'); textC('the plant marker —', 1440, 730, C.dim, a3); textC('a different sign', 1440, 768, C.dim, a3); }
-      const a4 = fade(t, c2 + 20 * SPW, .6); if (a4 > 0) { ctx.save(); ctx.globalAlpha = a4; card(610, 190, 700, 84, 90, C.paper, .4); font(40, SERIF, 400, 'italic'); textC('≈ “bitter / foul cucurbit”', 960, 245, C.ink); ctx.restore(); }
+      const a4 = fade(t, c2 + 20 * S.spw[2], .6); if (a4 > 0) { ctx.save(); ctx.globalAlpha = a4; card(610, 190, 700, 84, 90, C.paper, .4); font(40, SERIF, 400, 'italic'); textC('≈ “bitter / foul cucurbit”', 960, 245, C.ink); ctx.restore(); }
       font(22, SANS); textL('Signs shown in transliteration', 60, 1040, 'rgba(200,190,170,.45)', fade(t, .3, .5));
       vignette();
     } },
@@ -455,10 +456,10 @@ const SHOTS = [
       const g = easeOut(ramp(t, c1 - .3, c1 + .8));
       KIT.glow(ctx, 1150, 450, 320, 'rgba(255,230,160,A)', .4 * g); KIT.gourd(ctx, 1150, 450 + (1 - g) * 560, 2.4, t, 92, .12);
       const tag = (s, y, size, st, col, a) => { if (a <= 0) return; ctx.save(); ctx.globalAlpha = a; font(size, SERIF, 400, st); textC(s, 1150, y, col); ctx.restore(); };
-      if (g > .5) { ctx.save(); ctx.globalAlpha = fade(t, c1 + 2 * SPW, .5); card(880, 630, 540, 170, 91, C.paper, .5); ctx.restore(); }
-      tag('Citrullus colocynthis', 690, 50, 'italic', C.ink, fade(t, c1 + 3 * SPW, .6));
-      tag('colocynth · the bitter apple', 735, 32, 'normal', 'rgba(42,33,26,.85)', fade(t, c1 + 6 * SPW, .6));
-      tag('desert gourd · watermelon genus · violent purgative', 775, 24, 'italic', 'rgba(42,33,26,.7)', fade(t, c1 + 12 * SPW, .6));
+      if (g > .5) { ctx.save(); ctx.globalAlpha = fade(t, c1 + 2 * S.spw[1], .5); card(880, 630, 540, 170, 91, C.paper, .5); ctx.restore(); }
+      tag('Citrullus colocynthis', 690, 50, 'italic', C.ink, fade(t, c1 + 3 * S.spw[1], .6));
+      tag('colocynth · the bitter apple', 735, 32, 'normal', 'rgba(42,33,26,.85)', fade(t, c1 + 6 * S.spw[1], .6));
+      tag('desert gourd · watermelon genus · violent purgative', 775, 24, 'italic', 'rgba(42,33,26,.7)', fade(t, c1 + 12 * S.spw[1], .6));
       KIT.avatar(ctx, 400, 1110, 820, t, Object.assign({ pop: ramp(t, .4, 1.4) }, DESERT_AV));
       drawChips(t, 1, chipState(S.T0 + t, 3));
       lowerThird('Böck, Ghazanfar & Nesbitt, An Ancient Mesopotamian Herbal, Kew Publishing, 2023', t, c2, S.dur);
@@ -471,7 +472,7 @@ const SHOTS = [
       KIT.desert(ctx, t, 60 + t * 8);
       ctx.save(); ctx.translate(1560, 960); ctx.rotate(-1.35); KIT.poppy(ctx, 0, 0, .8, 1); ctx.restore(); KIT.strike(ctx, 1370, 900, 1600, 930, ramp(t, 1.4, 1.9), 11, 12);
       F2(150, 600); textC('“joy plant”', 1250, 290, '#fff4dc'); KIT.strike(ctx, 940, 256, 1570, 242, ramp(t, .5, 1.1), 5, 20);
-      font(58, SERIF, 400, 'italic'); textC('almost certainly… a stinking cucumber', 1250, 390, '#3a1d10', fade(t, S.cues[0] + 4 * SPW, .6));
+      font(58, SERIF, 400, 'italic'); textC('almost certainly… a stinking cucumber', 1250, 390, '#3a1d10', fade(t, S.cues[0] + 4 * S.spw[0], .6));
       KIT.gourd(ctx, lerp(2100, 1150, easeOut(ramp(t, .9, 1.7))), 650, 2.2, t, 92, (1 - easeOut(ramp(t, .9, 1.7))) * -8);
       KIT.avatar(ctx, 400, 1110, 820, t, DESERT_AV);
       drawChips(t, 1, chipState(S.T0 + t, -1));
@@ -493,11 +494,13 @@ function chunks(line) {
 }
 let T = 0; const CAPTIONS = [];
 for (const S of SHOTS) {
-  S.T0 = T; S.cues = []; S.durs = []; let t = S.lead || .3;
+  S.T0 = T; S.cues = []; S.durs = []; S.spw = []; let t = S.lead || .3;
+  const vo = window.VO_TIMING && window.VO_TIMING[S.id];
   S.lines.forEach((ln, li) => {
     S.cues.push(t); let ct = t;
-    for (const ch of chunks(ln)) { const d = words(ch) * SPW; CAPTIONS.push({ start: S.T0 + ct, end: S.T0 + ct + d, text: ch }); ct += d; }
-    const d = words(ln) * SPW; S.durs.push(d); t += d + (li < S.lines.length - 1 ? .6 : 0);
+    const d = vo ? vo[li] : words(ln) * SPW; const spw = d / words(ln); S.spw.push(spw);
+    for (const ch of chunks(ln)) { const dc = words(ch) * spw; CAPTIONS.push({ start: S.T0 + ct, end: S.T0 + ct + dc, text: ch }); ct += dc; }
+    S.durs.push(d); t += d + (li < S.lines.length - 1 ? .6 : 0);
     if (S.strikeAfterLine === li) CHIP_STRIKE_T[['one', 'two', 'three', 'four'].indexOf(S.id)] = S.T0 + t - .6;
   });
   S.dur = t + (S.pad || 0); T += S.dur;
@@ -532,7 +535,7 @@ function renderAt(T) {
   caption(T);
 }
 window.renderAt = renderAt;
-window.getInfo = () => ({ total: TOTAL, captions: CAPTIONS, shots: SHOTS.map(s => ({ id: s.id, scene: s.scene || '', start: s.T0, dur: s.dur })), events: EVENTS });
+window.getInfo = () => ({ total: TOTAL, captions: CAPTIONS, shots: SHOTS.map(s => ({ id: s.id, scene: s.scene || '', start: s.T0, dur: s.dur, cues: s.cues.map(c => s.T0 + c) })), events: EVENTS, vo: !!window.VO_TIMING });
 window.frameJPEG = (T, q = .92) => { renderAt(T); return cv.toDataURL('image/jpeg', q); };
 window.ready = (async () => {
   await KIT.avatarReady;
