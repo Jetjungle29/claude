@@ -24,3 +24,18 @@ Chapter One as printed", so where the book has the same error, fix the book too.
   Nencini 2022 and Böck, Ghazanfar & Nesbitt 2023 before recording. The pilot shows the signs **in transliteration
   only**, not as cuneiform glyphs, so no sign shapes are asserted on screen.
 - **The book's buy link** ([FILL IN]). Don't publish the film before it's live.
+
+## Full-film pass (Scenes 2, 4–8, 10, outro)
+
+| # | Where | v1 | v2 | Why |
+|---|-------|----|----|-----|
+| 11 | Scene 4, Thompson | "Roughly 2,000 years later than the claim" | "Some 2,700 years later than the claim" | The claim is 3400 BC and Thompson's Nineveh texts are 7th century BC: a gap of about 2,700 years. |
+| 12 | Scene 7, Anchor | "Californian ingredient law made them use honey instead." | "They ended up sweetening it with honey as well." | Every account found (Katz, Maytag & Civil, *Archaeology* 1991, and write-ups of it) says it was sweetened with honey **and** dates. I couldn't confirm the law-forced swap. |
+| 13 | Mid-video break | "[FILL IN: where to get it]" | "the link is in the description and the pinned comment" | Works whenever the book goes live. |
+| 14 | Outro | "I made a film on exactly that. You can check it out by clicking right here." | "…that's the next film. Subscribe so you don't miss it." | Chapter Two doesn't exist yet. Restore the original once it's published. |
+
+### Still open (check against the book's sources)
+- **Damerow quote.** "We do not even know for sure that the resulting product had any alcohol content at all." I couldn't confirm the exact wording; the Max Planck press release paraphrases it as "we cannot say for sure whether their end product even contained alcohol". Check it against CDLJ 2012:2.
+- **"No brewery has ever been excavated at Giza."** Lehner said this in 2010 (NOVA). Check whether AERA has reported one since.
+- **The "gallon a day" on the British Museum blog.** It's cited from the book; I couldn't open the page from here.
+- **"Malt covered with earth" becoming "malt set on the ground".** This is from Katz & Maytag 1991, which I couldn't open from here.

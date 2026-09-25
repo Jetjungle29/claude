@@ -22,7 +22,13 @@ SAY = [("3400 B.C.", "thirty-four hundred B.C."), ("3400 BC", "thirty-four hundr
        ("3000 to 2900 BC", "three thousand to twenty-nine hundred B.C."), ("2023", "twenty twenty-three"),
        ("ḪÚL", "khool"), ("GÍL", "gill"), ("Hul Gil", "Hool Gill"), ("hul gil", "hool gill"), ("Böck", "Berk"),
        ("Citrullus colocynthis", "sit-rullus, kollo-sinthis"), ("colocynth,", "kollo-sinth,"),
-       ('"joy plant."', "joy plant."), ("'joy plant.'", "joy plant.")]
+       ('"joy plant."', "joy plant."), ("'joy plant.'", "joy plant."),
+       ("1188 to 1069 BC", "eleven eighty-eight to ten sixty-nine B.C."), ("3.5%", "three and a half percent"),
+       ("Deir el-Medina", "Dare el Meh-deena"), ("Menkaure", "Men-cow-ray"), ("Khufu", "Koo-foo"), ("Nippur", "Nip-poor"),
+       ("Ninkasi", "Nin-kah-see"), ("bappir", "bap-peer"), ("Abydos", "Ah-bye-doss"), ("Tel Yehud", "Tel Yeh-hood"),
+       ("Afanasieva", "Afa-nah-see-eva"), ("per shena", "per sheh-nah"), ("A. R. Neligan", "A. R. Nelligan"),
+       ("3000 BC", "three thousand B.C."), ("1800 BC", "eighteen hundred B.C."), ("14th century BC", "fourteenth century B.C."),
+       ("seventh-century BC", "seventh-century B.C."), ("\"Joy Plant\"", "Joy Plant"), ("\"memory aid", "memory aid"), ("couldn't read\"", "couldn't read")]
 # Direction per sentence (matched by its opening words): (speed multiplier, pause after in seconds).
 DIRECT = [
     ("Every part of it is wrong", .82, .95), ("Not exaggerated", .92, .35), ("Not simplified", .92, .55),
@@ -36,6 +42,25 @@ DIRECT = [
     ("Here we go", .95, .2), ("If you appreciate", 1.0, .35),
     ("Read that again", .85, .5), ("So the claim gives", .92, .4),
     ("But the second", .92, .3), ("It means something closer", .88, .45),
+    ("A private conversation", .85, .6), ("That's what the whole thing rests on", .9, .5), ("A conversation, reported secondhand", .92, .3),
+    ("Not Sumerian", .9, .35), ("Not 3400 BC", .9, .4), ("Some 2,700 years", .93, .3),
+    ("Remember that book", .9, .35), ("47 years apart", .9, .4), ("There's a small postscript", .95, .4),
+    ("That's going to be a recurring problem", .88, .3), ("So what is actually true", .92, .5), ("That is the earliest", .9, .3),
+    ("Quick break", .95, .4), ("All right, back to it", .95, .2), ("Let's try another one", .92, .3),
+    ("Here the news is better", .95, .3), ("The text is entirely real", .92, .35), ("Two corrections", .92, .3),
+    ("The date isn't", .88, .4), ("They may well be school exercises", .95, .35),
+    ("Now the complication", .9, .5), ("Beer bread?", .95, .3), ("Sourdough?", .95, .3), ("Malt loaf?", .95, .4), ("Nobody knows", .85, .3),
+    ("And Damerow's conclusion", .92, .6), ("We do not even know", .85, .3),
+    ("I like this story enormously", .95, .35), ("One more, and this one", .92, .5), ("A gallon a day", .9, .3),
+    ("The general claim is true", .93, .35), ("But every precise figure fails", .82, .3),
+    ("The ration numbers come", .9, .35), ("The gallon a day has no", .9, .35), ("The strength is a guess", .88, .4),
+    ("Assume a thick, weak", .95, .2), ("and it's lunch", .9, .4), ("The evidence doesn't let you choose", .9, .35),
+    ("But so far the breweries have eluded us", .85, .3), ("No brewery has ever been", .9, .4),
+    ("This is a history of vice", .9, .5), ("A substance arrives", .92, .35), ("Some people are ruined", .92, .35),
+    ("And what actually changes the toll", .9, .35), ("Every one of those levers", .9, .3),
+    ("One promise", .88, .5), ("No doses", .9, .35), ("Nothing here teaches", .9, .3),
+    ("Drunk for a penny", .9, .35), ("Dead drunk for twopence", .9, .35), ("Clean straw for nothing", .88, .3),
+    ("Subscribe so you don't miss it", .95, .2),
 ]
 DEFAULT_PAUSE = .32
 

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Joy Plant Pilot</title>
 <link rel="stylesheet" href="fonts.css">
+<script>if (new URLSearchParams(location.search).get('film')) document.write('<script src="ch1_shots.js"><\/script>');</script>
 <style>
   html, body { margin: 0; background: #000; }
   canvas { display: block; }
@@ -481,6 +482,7 @@ const SHOTS = [
   { id: 'end', pad: 0, lead: 3.5, lines: [],
     draw(t, S) { ctx.fillStyle = '#070606'; ctx.fillRect(0, 0, W, H); font(30, SERIF, 400, 'italic'); textC('End of pilot · the film continues with Scene 4, “Where it came from”', W / 2, H / 2, C.dim, fade(t, .3, .6) * (1 - fade(t, S.dur - .8, .6))); } },
 ];
+if (window.CH1) window.CH1(SHOTS); // full-film mode: splice in the rest of Chapter One
 
 // ---- build timing -----------------------------------------------------------
 // Caption chunks: split lines at sentence ends and commas into chunks of ≤ 14 words.

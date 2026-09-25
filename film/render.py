@@ -34,7 +34,7 @@ def open_page(pw, port, captions):
     exe = CHROMIUM if Path(CHROMIUM).exists() else None
     browser = pw.chromium.launch(executable_path=exe, args=["--disable-gpu"])
     page = browser.new_page(viewport={"width": 1920, "height": 1080})
-    page.goto(f"http://127.0.0.1:{port}/pilot.html?captions={1 if captions else 0}")
+    page.goto(f"http://127.0.0.1:{port}/pilot.html?captions={1 if captions else 0}" + ("&film=1" if os.environ.get("FILM") else ""))
     page.evaluate("window.ready")
     return browser, page
 
@@ -67,7 +67,9 @@ def main():
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4)
     ap.add_argument("--no-captions", action="store_true")
+    ap.add_argument("--film", action="store_true", help="full Chapter One film instead of the pilot")
     a = ap.parse_args()
+    if a.film: os.environ["FILM"] = "1"
     OUT.mkdir(exist_ok=True)
     port = serve()
     captions = not a.no_captions
@@ -103,7 +105,7 @@ def main():
     with ProcessPoolExecutor(len(jobs)) as ex:
         parts = list(ex.map(render_part, jobs))
     lst = OUT / "parts.txt"; lst.write_text("".join(f"file '{p}'\n" for p in parts))
-    name = OUT / ("joy-plant-pilot" + ("-narrated" if audio.name == "mix.wav" else "") + ("" if captions else "-clean") + ".mp4")
+    name = OUT / (("vice-versa-ch1-joy-plant" if a.film else "joy-plant-pilot") + ("-narrated" if audio.name == "mix.wav" else "") + ("" if captions else "-clean") + ".mp4")
     subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
                     "-i", str(audio), "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
                     "-shortest", "-movflags", "+faststart", str(name)], check=True)
